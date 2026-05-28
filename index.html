@@ -148,6 +148,15 @@
             <p class="kicker">Time guide</p>
             <h2>Driver pacing</h2>
           </div>
+          <div class="voice-agent" aria-label="Voice route assistant">
+            <button class="voice-button" id="voiceAgentButton" type="button">
+              <span class="voice-dot" aria-hidden="true"></span>
+              <span id="voiceButtonLabel">Speak request</span>
+            </button>
+            <p id="voiceAgentStatus">Tell the agent your notes, direction, days, traffic, gas, food, or start plan.</p>
+            <textarea id="voiceTranscript" rows="3" placeholder="Voice transcript appears here. You can also type a request, then analyze it."></textarea>
+            <button class="ghost-button" id="analyzeVoiceButton" type="button">Analyze request</button>
+          </div>
           <ol class="assistant-list" id="assistantList">
             <li>Use the first ranked option for the shortest practical day.</li>
             <li>Use Google Maps to confirm traffic before departure.</li>

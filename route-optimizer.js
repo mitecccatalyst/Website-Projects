@@ -6,6 +6,8 @@ const state = {
   selectedRouteId: null,
   routes: [],
   visibleSlots: 10,
+  recognition: null,
+  listening: false,
 };
 
 const districtCoords = {
@@ -38,6 +40,11 @@ const el = {
   slotTemplate: document.querySelector("#slotTemplate"),
   startAddress: document.querySelector("#startAddress"),
   driverNotes: document.querySelector("#driverNotes"),
+  voiceAgentButton: document.querySelector("#voiceAgentButton"),
+  voiceButtonLabel: document.querySelector("#voiceButtonLabel"),
+  voiceAgentStatus: document.querySelector("#voiceAgentStatus"),
+  voiceTranscript: document.querySelector("#voiceTranscript"),
+  analyzeVoiceButton: document.querySelector("#analyzeVoiceButton"),
   bulkAddresses: document.querySelector("#bulkAddresses"),
   tripDays: document.querySelector("#tripDays"),
   maxHours: document.querySelector("#maxHours"),
@@ -66,6 +73,7 @@ const el = {
 function init() {
   renderSlots();
   bindEvents();
+  setupVoiceAgent();
   loadPlan();
   updateCounters();
   renderEmptyRoutes();
@@ -100,6 +108,8 @@ function bindEvents() {
   document.querySelector("#openSelectedGoogle").addEventListener("click", openSelectedGoogle);
   document.querySelector("#copySelected").addEventListener("click", copySelectedManifest);
   document.querySelector("#csvImport").addEventListener("change", importCsvFile);
+  el.voiceAgentButton.addEventListener("click", toggleVoiceAgent);
+  el.analyzeVoiceButton.addEventListener("click", () => analyzeVoiceRequest(el.voiceTranscript.value));
 
   document.querySelectorAll(".segment").forEach((button) => {
     button.addEventListener("click", () => {
@@ -129,6 +139,204 @@ function bindEvents() {
     const index = Number(row.dataset.index);
     moveStop(index, up ? -1 : 1);
   });
+}
+
+function setupVoiceAgent() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    el.voiceAgentButton.disabled = true;
+    el.voiceButtonLabel.textContent = "Voice unavailable";
+    el.voiceAgentStatus.textContent = "This browser does not support microphone dictation. Type a request below and tap Analyze request.";
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = "en-US";
+
+  recognition.addEventListener("start", () => {
+    state.listening = true;
+    el.voiceAgentButton.classList.add("listening");
+    el.voiceButtonLabel.textContent = "Listening...";
+    el.voiceAgentStatus.textContent = "Speak naturally. Example: start downtown, go north west first, gas near midpoint, two days.";
+  });
+
+  recognition.addEventListener("result", (event) => {
+    const transcript = [...event.results]
+      .map((result) => result[0]?.transcript || "")
+      .join(" ")
+      .trim();
+    el.voiceTranscript.value = transcript;
+
+    const lastResult = event.results[event.results.length - 1];
+    if (lastResult?.isFinal) analyzeVoiceRequest(transcript);
+  });
+
+  recognition.addEventListener("end", () => {
+    state.listening = false;
+    el.voiceAgentButton.classList.remove("listening");
+    el.voiceButtonLabel.textContent = "Speak request";
+    if (!el.voiceTranscript.value.trim()) {
+      el.voiceAgentStatus.textContent = "No voice captured. Try again or type the request below.";
+    }
+  });
+
+  recognition.addEventListener("error", () => {
+    state.listening = false;
+    el.voiceAgentButton.classList.remove("listening");
+    el.voiceButtonLabel.textContent = "Speak request";
+    el.voiceAgentStatus.textContent = "Microphone could not start. You can still type the request and analyze it.";
+  });
+
+  state.recognition = recognition;
+}
+
+function toggleVoiceAgent() {
+  if (!state.recognition) return;
+  if (state.listening) {
+    state.recognition.stop();
+    return;
+  }
+
+  el.voiceTranscript.value = "";
+  try {
+    state.recognition.start();
+  } catch {
+    el.voiceAgentStatus.textContent = "Voice is already starting. Wait a second, then try again.";
+  }
+}
+
+function analyzeVoiceRequest(rawText) {
+  const text = String(rawText || "").trim();
+  if (!text) {
+    showToast("Speak or type a request first.");
+    return;
+  }
+
+  const analysis = analyzeRouteLanguage(text);
+  applyVoiceAnalysis(text, analysis);
+  renderVoiceAnalysis(analysis);
+  handleDraftInput();
+
+  if (getStops().length && el.startAddress.value.trim()) {
+    optimizeRoutes();
+  }
+}
+
+function analyzeRouteLanguage(text) {
+  const lower = text.toLowerCase();
+  const analysis = {
+    directions: [],
+    conveniences: [],
+    traffic: null,
+    days: null,
+    maxHours: null,
+    start: "",
+    confidence: 0,
+  };
+
+  ["north", "south", "east", "west", "central", "downtown"].forEach((word) => {
+    if (lower.includes(word)) analysis.directions.push(word === "downtown" ? "central" : word);
+  });
+
+  ["gas", "fuel", "food", "coffee", "break", "pit stop", "restroom"].forEach((word) => {
+    if (lower.includes(word)) analysis.conveniences.push(word);
+  });
+
+  if (/busy|rush|traffic|avoid traffic|peak/.test(lower)) analysis.traffic = "busy";
+  if (/normal|light traffic|not busy/.test(lower)) analysis.traffic = "normal";
+
+  const digitDays = lower.match(/\b([1-7])\s*(day|days)\b/);
+  const wordDays = lower.match(/\b(one|two|three|four|five|six|seven)\s*(day|days)\b/);
+  if (digitDays) analysis.days = Number(digitDays[1]);
+  if (wordDays) analysis.days = numberWord(wordDays[1]);
+
+  const hours = lower.match(/\b([1-9]|1[0-6])\s*(hour|hours|hr|hrs)\b/);
+  if (hours) analysis.maxHours = Number(hours[1]);
+  const wordHours = lower.match(/\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen)\s*(hour|hours|hr|hrs)\b/);
+  if (wordHours) analysis.maxHours = numberWord(wordHours[1]);
+
+  const startMatch = text.match(/\b(?:start|starting|leave|leaving|from)\s+(?:at|from)?\s*([^,.]+(?:,\s*[^,.]+)?)/i);
+  if (startMatch) analysis.start = startMatch[1].trim();
+
+  analysis.confidence = [
+    analysis.directions.length,
+    analysis.conveniences.length,
+    analysis.traffic ? 1 : 0,
+    analysis.days ? 1 : 0,
+    analysis.maxHours ? 1 : 0,
+    analysis.start ? 1 : 0,
+  ].reduce((sum, value) => sum + value, 0);
+
+  return analysis;
+}
+
+function applyVoiceAnalysis(text, analysis) {
+  const existingNotes = el.driverNotes.value.trim();
+  el.driverNotes.value = [existingNotes, `Voice request: ${text}`].filter(Boolean).join("\n");
+
+  if (analysis.start && !el.startAddress.value.trim()) {
+    el.startAddress.value = analysis.start;
+  }
+
+  if (analysis.days) {
+    el.tripDays.value = String(clamp(analysis.days, 1, 7));
+  }
+
+  if (analysis.maxHours) {
+    el.maxHours.value = String(clamp(analysis.maxHours, 1, 16));
+  }
+
+  if (analysis.traffic) {
+    state.traffic = analysis.traffic;
+    document.querySelectorAll(".segment").forEach((button) => {
+      button.classList.toggle("active", button.dataset.traffic === state.traffic);
+    });
+  }
+}
+
+function renderVoiceAnalysis(analysis) {
+  const direction = analysis.directions.length
+    ? `Route priority: ${[...new Set(analysis.directions)].join(", ")}.`
+    : "Route priority: use closest efficient clusters.";
+  const convenience = analysis.conveniences.length
+    ? `Convenience stops: ${[...new Set(analysis.conveniences)].join(", ")}.`
+    : "Convenience stops: add gas or food notes if needed.";
+  const schedule = [
+    analysis.days ? `${analysis.days} day${analysis.days === 1 ? "" : "s"}` : "",
+    analysis.maxHours ? `${analysis.maxHours} hours/day` : "",
+    analysis.traffic ? `${analysis.traffic} traffic` : "",
+  ].filter(Boolean).join(", ");
+
+  el.voiceAgentStatus.textContent = analysis.confidence
+    ? `Analyzed request. ${direction} ${convenience} ${schedule ? `Schedule: ${schedule}.` : ""}`
+    : "Saved your spoken note. Add direction, traffic, days, gas, food, or start location for stronger routing.";
+
+  setAssistant(analysis.confidence
+    ? "Voice agent analyzed the request and updated the route notes/settings. I will use the best matching route option."
+    : "Voice note saved. I can use it as driver context when you optimize.");
+}
+
+function numberWord(word) {
+  return {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    eleven: 11,
+    twelve: 12,
+    thirteen: 13,
+    fourteen: 14,
+    fifteen: 15,
+    sixteen: 16,
+  }[word] || null;
 }
 
 function getStops() {

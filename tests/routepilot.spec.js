@@ -48,4 +48,17 @@ test.describe("RoutePilot planner", () => {
     await expect(page.locator(".slot-postal").first()).toHaveValue("M5V 2T6");
     await expect(page.locator(".map-node.draft")).toHaveCount(3);
   });
+
+  test("typed voice request updates notes, traffic, days, and route advice", async ({ page }) => {
+    await page.getByRole("button", { name: "Sample" }).click();
+    await page.locator("#voiceTranscript").fill("Start from the warehouse, go north west first, use busy traffic, two days, gas near midpoint, eight hours");
+    await page.getByRole("button", { name: "Analyze request" }).click();
+
+    await expect(page.locator("#driverNotes")).toHaveValue(/Voice request:/);
+    await expect(page.locator("#tripDays")).toHaveValue("2");
+    await expect(page.locator("#maxHours")).toHaveValue("8");
+    await expect(page.locator("[data-traffic='busy']")).toHaveClass(/active/);
+    await expect(page.locator("#voiceAgentStatus")).toContainText("Analyzed request");
+    await expect(page.locator(".route-card")).toHaveCount(2);
+  });
 });
