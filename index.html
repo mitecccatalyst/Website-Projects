@@ -1,16 +1,217 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>RouteIQ GTA — Delivery Route Optimizer</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    <meta name="description" content="Optimized delivery routing for the Greater Toronto Area. Find the most efficient route for your cleaning product deliveries." />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RoutePilot | Delivery Route Optimizer</title>
+  <meta
+    name="description"
+    content="Plan delivery routes with up to 60 stops, compare two or three efficient options, and open chosen route segments in Google Maps or Waze."
+  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%2377e7b6'/%3E%3Cpath d='M18 44V18h16c7 0 11 4 11 10 0 4-2 7-6 9l8 7H36l-7-6h-2v6H18Zm9-14h6c3 0 4-1 4-3s-1-3-4-3h-6v6Z' fill='%23070908'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="./route-optimizer.css">
+</head>
+<body>
+  <div class="motion-field" aria-hidden="true">
+    <div class="moving-grid"></div>
+    <div class="road road-one"></div>
+    <div class="road road-two"></div>
+    <div class="road road-three"></div>
+  </div>
+
+  <header class="topbar">
+    <a class="brand" href="#planner" aria-label="RoutePilot planner">
+      <span class="brand-mark">RP</span>
+      <span>
+        <strong>RoutePilot</strong>
+        <small>Delivery route desk</small>
+      </span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="#planner">Planner</a>
+      <a href="#route-options">Routes</a>
+      <a href="#road-assistant">Assistant</a>
+    </nav>
+    <button class="ghost-button" id="savePlanButton" type="button">Save plan</button>
+  </header>
+
+  <main>
+    <section class="assistant-strip" id="road-assistant" aria-live="polite">
+      <div class="assistant-core">
+        <span class="status-orbit" aria-hidden="true"></span>
+        <div>
+          <p class="kicker">Road Assistant</p>
+          <p id="assistantMessage">Add a start point and delivery stops. I will rank the fastest practical routes and keep the driver on pace.</p>
+        </div>
+      </div>
+      <div class="assistant-stats" aria-label="Plan status">
+        <span id="stopCounter">0 stops</span>
+        <span id="dayCounter">1 day</span>
+        <span id="routeCounter">0 routes</span>
+      </div>
+    </section>
+
+    <section class="planner-shell" id="planner">
+      <aside class="control-rail" aria-label="Route controls">
+        <section class="panel">
+          <div class="panel-heading">
+            <p class="kicker">Trip setup</p>
+            <h1>Plan stops, then choose the route.</h1>
+          </div>
+
+          <label class="field">
+            <span>Start address</span>
+            <input id="startAddress" type="text" autocomplete="street-address" placeholder="Driver start location">
+          </label>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Days</span>
+              <input id="tripDays" type="number" min="1" max="7" value="1">
+            </label>
+            <label class="field">
+              <span>Max hours/day</span>
+              <input id="maxHours" type="number" min="1" max="16" step="0.5" value="8">
+            </label>
+          </div>
+
+          <div class="field-grid">
+            <label class="field">
+              <span>Stop time</span>
+              <input id="serviceMinutes" type="number" min="1" max="90" value="6">
+            </label>
+            <label class="field">
+              <span>Depart</span>
+              <input id="departTime" type="time" value="08:30">
+            </label>
+          </div>
+
+          <div class="segmented" role="radiogroup" aria-label="Traffic mode">
+            <button class="segment active" data-traffic="normal" type="button">Normal</button>
+            <button class="segment" data-traffic="busy" type="button">Busy</button>
+          </div>
+
+          <label class="toggle-row">
+            <input id="returnToStart" type="checkbox">
+            <span>Return to start at day end</span>
+          </label>
+
+          <div class="button-row">
+            <button class="primary-button" id="optimizeButton" type="button">Optimize routes</button>
+            <button class="ghost-button" id="sampleButton" type="button">Sample</button>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-heading compact">
+            <p class="kicker">Bulk entry</p>
+            <h2>Paste address list</h2>
+          </div>
+          <label class="field">
+            <span>One stop per line</span>
+            <textarea id="bulkAddresses" rows="7" placeholder="123 Main St&#10;45 Market Ave&#10;900 North Road"></textarea>
+          </label>
+          <div class="button-row">
+            <button class="secondary-button" id="importButton" type="button">Fill slots</button>
+            <button class="danger-button" id="clearButton" type="button">Clear</button>
+          </div>
+        </section>
+
+        <section class="panel agent-panel">
+          <div class="panel-heading compact">
+            <p class="kicker">Time guide</p>
+            <h2>Driver pacing</h2>
+          </div>
+          <ol class="assistant-list" id="assistantList">
+            <li>Use the first ranked option for the shortest practical day.</li>
+            <li>Use Google Maps to confirm traffic before departure.</li>
+            <li>Use Waze buttons for stop-by-stop navigation.</li>
+          </ol>
+        </section>
+      </aside>
+
+      <section class="workbench" aria-label="Route workbench">
+        <div class="stop-board">
+          <div class="board-heading">
+            <div>
+              <p class="kicker">Address slots</p>
+              <h2>Up to 60 delivery stops</h2>
+            </div>
+            <div class="board-actions">
+              <button class="ghost-button" id="compactButton" type="button">Compact</button>
+              <button class="ghost-button" id="exportButton" type="button">Export CSV</button>
+            </div>
+          </div>
+          <div class="slot-grid" id="slotGrid" aria-label="Delivery stop slots"></div>
+        </div>
+
+        <section class="route-area" id="route-options">
+          <div class="route-head">
+            <div>
+              <p class="kicker">Top route choices</p>
+              <h2>Ranked options</h2>
+            </div>
+            <span class="route-mode" id="routeMode">Waiting for stops</span>
+          </div>
+          <div class="route-options" id="routeOptions"></div>
+          <div class="day-plan" id="dayPlan"></div>
+        </section>
+      </section>
+
+      <aside class="map-rail" aria-label="Map preview">
+        <section class="map-panel">
+          <div class="map-top">
+            <div>
+              <p class="kicker">Map handoff</p>
+              <h2>Google and Waze</h2>
+            </div>
+            <span id="mapStatus">Ready</span>
+          </div>
+          <div class="map-preview" id="mapPreview" aria-label="Route preview map">
+            <div class="map-grid"></div>
+            <div class="map-path" id="mapPath"></div>
+          </div>
+          <iframe
+            id="googlePreview"
+            title="Google Maps preview"
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade"
+            src="https://www.google.com/maps?q=United%20States&output=embed"
+          ></iframe>
+          <div class="handoff-actions">
+            <button class="primary-button" id="openSelectedGoogle" type="button">Open selected in Google</button>
+            <button class="secondary-button" id="copySelected" type="button">Copy manifest</button>
+          </div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <template id="slotTemplate">
+    <article class="slot-row">
+      <span class="slot-number"></span>
+      <input class="slot-input" type="text" autocomplete="street-address" placeholder="Delivery address">
+      <select class="slot-zone" aria-label="District">
+        <option value="auto">Auto</option>
+        <option value="central">Central</option>
+        <option value="north">North</option>
+        <option value="east">East</option>
+        <option value="south">South</option>
+        <option value="west">West</option>
+      </select>
+      <button class="icon-button move-up" type="button" aria-label="Move stop up">Up</button>
+      <button class="icon-button move-down" type="button" aria-label="Move stop down">Down</button>
+    </article>
+  </template>
+
+  <script src="./route-optimizer.js"></script>
+</body>
 </html>
