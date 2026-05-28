@@ -70,6 +70,11 @@
             <input id="startAddress" type="text" autocomplete="street-address" placeholder="Driver start location">
           </label>
 
+          <label class="field">
+            <span>Driver notes</span>
+            <textarea id="driverNotes" rows="4" placeholder="Start from the shop, move north west first, stop for gas near the midpoint, avoid downtown after 4 PM."></textarea>
+          </label>
+
           <div class="field-grid">
             <label class="field">
               <span>Days</span>
@@ -125,8 +130,8 @@
             <h2>Paste address list</h2>
           </div>
           <label class="field">
-            <span>One stop per line</span>
-            <textarea id="bulkAddresses" rows="7" placeholder="123 Main St&#10;45 Market Ave&#10;900 North Road"></textarea>
+            <span>Paste from Maps, notes, bullets, or spreadsheets</span>
+            <textarea id="bulkAddresses" rows="8" placeholder="123 Main St, Toronto, M5V 2T6&#10;- 45 Market Ave Toronto ON M4M 1A1&#10;900 North Road | Etobicoke | M9W 5L2"></textarea>
           </label>
           <div class="button-row">
             <button class="secondary-button" id="importButton" type="button">Fill slots</button>
@@ -174,6 +179,14 @@
               <button class="ghost-button" id="exportButton" type="button">Export CSV</button>
             </div>
           </div>
+          <div class="slot-header" aria-hidden="true">
+            <span>#</span>
+            <span>Postal code</span>
+            <span>Address</span>
+            <span>City</span>
+            <span>District</span>
+            <span></span>
+          </div>
           <div class="slot-grid" id="slotGrid" aria-label="Delivery stop slots"></div>
         </div>
 
@@ -203,6 +216,7 @@
           <div class="map-preview" id="mapPreview" aria-label="Route preview map">
             <div class="map-grid"></div>
             <div class="map-path" id="mapPath"></div>
+            <div class="map-hint" id="mapHint">Pins appear here as you type addresses.</div>
           </div>
           <iframe
             id="googlePreview"
@@ -225,7 +239,9 @@
   <template id="slotTemplate">
     <article class="slot-row">
       <span class="slot-number"></span>
-      <input class="slot-input" type="text" autocomplete="street-address" placeholder="Delivery address">
+      <input class="slot-postal" type="text" autocomplete="postal-code" placeholder="Postal">
+      <input class="slot-address" type="text" autocomplete="street-address" placeholder="Street address">
+      <input class="slot-city" type="text" autocomplete="address-level2" placeholder="City">
       <select class="slot-zone" aria-label="District">
         <option value="auto">Auto</option>
         <option value="central">Central</option>

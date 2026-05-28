@@ -37,6 +37,7 @@ const el = {
   slotGrid: document.querySelector("#slotGrid"),
   slotTemplate: document.querySelector("#slotTemplate"),
   startAddress: document.querySelector("#startAddress"),
+  driverNotes: document.querySelector("#driverNotes"),
   bulkAddresses: document.querySelector("#bulkAddresses"),
   tripDays: document.querySelector("#tripDays"),
   maxHours: document.querySelector("#maxHours"),
@@ -51,6 +52,7 @@ const el = {
   segmentPlan: document.querySelector("#segmentPlan"),
   routeMode: document.querySelector("#routeMode"),
   mapPreview: document.querySelector("#mapPreview"),
+  mapHint: document.querySelector("#mapHint"),
   googlePreview: document.querySelector("#googlePreview"),
   mapStatus: document.querySelector("#mapStatus"),
   stopCounter: document.querySelector("#stopCounter"),
@@ -76,7 +78,9 @@ function renderSlots() {
     const node = el.slotTemplate.content.firstElementChild.cloneNode(true);
     node.dataset.index = String(index);
     node.querySelector(".slot-number").textContent = String(index + 1).padStart(2, "0");
-    node.querySelector(".slot-input").dataset.index = String(index);
+    node.querySelector(".slot-postal").dataset.index = String(index);
+    node.querySelector(".slot-address").dataset.index = String(index);
+    node.querySelector(".slot-city").dataset.index = String(index);
     node.querySelector(".slot-zone").dataset.index = String(index);
     fragment.appendChild(node);
   }
@@ -109,8 +113,11 @@ function bindEvents() {
     });
   });
 
+  el.startAddress.addEventListener("input", handleDraftInput);
+  el.driverNotes.addEventListener("input", handleDraftInput);
+
   el.slotGrid.addEventListener("input", (event) => {
-    if (event.target.matches(".slot-input, .slot-zone")) updateCounters();
+    if (event.target.matches(".slot-postal, .slot-address, .slot-city, .slot-zone")) handleDraftInput();
   });
 
   el.slotGrid.addEventListener("click", (event) => {
@@ -127,24 +134,36 @@ function bindEvents() {
 function getStops() {
   return [...document.querySelectorAll(".slot-row")]
     .map((row, index) => {
-      const address = row.querySelector(".slot-input").value.trim();
+      const postalCode = row.querySelector(".slot-postal").value.trim();
+      const address = row.querySelector(".slot-address").value.trim();
+      const city = row.querySelector(".slot-city").value.trim();
+      const fullAddress = formatFullAddress({ postalCode, address, city });
       const selectedZone = row.querySelector(".slot-zone").value;
-      const zone = selectedZone === "auto" ? inferDistrict(address) : selectedZone;
-      return { index, address, zone, coords: coordsForStop(address, zone) };
+      const zone = selectedZone === "auto" ? inferDistrict(fullAddress) : selectedZone;
+      return { index, postalCode, address, city, fullAddress, zone, coords: coordsForStop(fullAddress, zone) };
     })
-    .filter((stop) => stop.address);
+    .filter((stop) => stop.fullAddress);
 }
 
 function setStops(stops) {
   const rows = [...document.querySelectorAll(".slot-row")];
   rows.forEach((row, index) => {
     const stop = stops[index];
-    row.querySelector(".slot-input").value = stop?.address || "";
+    row.querySelector(".slot-postal").value = stop?.postalCode || "";
+    row.querySelector(".slot-address").value = stop?.address || "";
+    row.querySelector(".slot-city").value = stop?.city || "";
     row.querySelector(".slot-zone").value = stop?.zone || "auto";
   });
   state.visibleSlots = Math.min(MAX_STOPS, Math.max(10, Math.ceil((stops.length || 1) / 10) * 10));
   updateVisibleSlots();
   updateCounters();
+}
+
+function formatFullAddress(stop) {
+  return [stop.address, stop.city, stop.postalCode]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function updateVisibleSlots() {
@@ -189,21 +208,16 @@ function clamp(value, min, max) {
 }
 
 function importBulkAddresses() {
-  const lines = el.bulkAddresses.value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .slice(0, MAX_STOPS);
+  const stops = parsePastedStops(el.bulkAddresses.value).slice(0, MAX_STOPS);
 
-  if (!lines.length) {
+  if (!stops.length) {
     showToast("Paste at least one address first.");
     return;
   }
 
-  const stops = lines.map((address) => ({ address, zone: "auto" }));
   setStops(stops);
   showToast(`${stops.length} stops imported into the 60-slot board.`);
-  setAssistant("Bulk stops are loaded. Check the start address, days, and traffic mode before optimizing.");
+  setAssistant("Bulk stops are pinned on the map. Add notes, check the start address, then optimize when ready.");
 }
 
 function importCsvFile(event) {
@@ -213,22 +227,71 @@ function importCsvFile(event) {
   const reader = new FileReader();
   reader.onload = () => {
     const rows = parseCsv(String(reader.result || ""));
-    const addresses = rows
-      .map((row) => findAddressValue(row))
+    const stops = rows
+      .map((row) => stopFromCsvRow(row, rows[0]))
       .filter(Boolean)
       .slice(0, MAX_STOPS);
 
-    if (!addresses.length) {
+    if (!stops.length) {
       showToast("No address column found in that CSV.");
       return;
     }
 
-    setStops(addresses.map((address) => ({ address, zone: "auto" })));
-    setAssistant(`${addresses.length} stops imported from CSV. Check the start address, then optimize.`);
-    showToast(`CSV imported: ${addresses.length} stops.`);
+    setStops(stops);
+    setAssistant(`${stops.length} stops imported from CSV and pinned. Check notes and start address before optimizing.`);
+    showToast(`CSV imported: ${stops.length} stops.`);
     event.target.value = "";
   };
   reader.readAsText(file);
+}
+
+function parsePastedStops(text) {
+  return text
+    .split(/\r?\n/)
+    .flatMap((line) => splitPossibleAddressLine(line))
+    .map((line) => stopFromTextLine(line))
+    .filter(Boolean);
+}
+
+function splitPossibleAddressLine(line) {
+  const cleaned = line
+    .replace(/^[\s>*-]+/, "")
+    .replace(/^\d+[.)]\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return [];
+  return [cleaned];
+}
+
+function stopFromTextLine(line) {
+  const parts = line
+    .split(/\t|\||;/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (parts.length >= 2) {
+    return normalizeStop({
+      address: parts[0],
+      city: parts[1] || "",
+      postalCode: parts[2] || "",
+      zone: "auto",
+    });
+  }
+
+  const commaParts = line.split(",").map((part) => part.trim()).filter(Boolean);
+  const postalCode = extractPostalCode(line);
+  if (commaParts.length >= 2) {
+    const address = commaParts[0];
+    const city = commaParts.find((part, index) => index > 0 && !sameText(part, postalCode) && !/\b[A-Z]\d[A-Z]\s?\d[A-Z]\d\b/i.test(part)) || "";
+    return normalizeStop({ address, city, postalCode, zone: "auto" });
+  }
+
+  return normalizeStop({
+    address: postalCode ? line.replace(postalCode, "").replace(/[,\s]+$/, "").trim() : line,
+    city: "",
+    postalCode,
+    zone: "auto",
+  });
 }
 
 function parseCsv(text) {
@@ -265,24 +328,64 @@ function parseCsv(text) {
   return rows;
 }
 
-function findAddressValue(row) {
-  if (!row.length) return "";
-  const headerWords = ["address", "street", "location", "stop", "destination"];
-  const looksLikeHeader = row.some((cell) => headerWords.includes(cell.trim().toLowerCase()));
-  if (looksLikeHeader) return "";
+function stopFromCsvRow(row, headerRow = []) {
+  if (!row.length) return null;
+  const header = headerRow.map((cell) => cell.trim().toLowerCase());
+  const rowLooksLikeHeader = row.every((cell, index) => cell.trim().toLowerCase() === header[index]);
+  if (rowLooksLikeHeader) return null;
 
-  return row.find((cell) => {
-    const value = cell.trim();
-    return /\d/.test(value) && /[a-z]/i.test(value);
-  }) || row[0].trim();
+  const valueFor = (names) => {
+    const index = header.findIndex((cell) => names.some((name) => cell.includes(name)));
+    return index >= 0 ? row[index]?.trim() || "" : "";
+  };
+
+  const address = valueFor(["address", "street", "location", "destination", "stop"])
+    || row.find((cell) => /\d/.test(cell) && /[a-z]/i.test(cell))?.trim()
+    || row[0]?.trim()
+    || "";
+  const city = valueFor(["city", "town", "municipality"]);
+  const postalCode = valueFor(["postal", "zip", "postcode"]) || extractPostalCode(row.join(" "));
+
+  return normalizeStop({ address, city, postalCode, zone: "auto" });
+}
+
+function normalizeStop(stop) {
+  const postalCode = String(stop.postalCode || "").trim();
+  const city = String(stop.city || "").trim();
+  let address = String(stop.address || "")
+    .replace(postalCode, "")
+    .replace(/\s*,\s*$/, "")
+    .trim();
+  if (city) {
+    address = address.replace(new RegExp(`\\b${escapeRegExp(city)}\\b`, "i"), "").replace(/\s*,\s*$/, "").trim();
+  }
+
+  if (!formatFullAddress({ address, city, postalCode })) return null;
+  return { postalCode, address, city, zone: stop.zone || "auto" };
+}
+
+function extractPostalCode(text) {
+  return String(text).match(/\b[A-Z]\d[A-Z][ -]?\d[A-Z]\d\b/i)?.[0]?.toUpperCase() || "";
+}
+
+function sameText(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
+function escapeRegExp(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function fillSample() {
   el.startAddress.value = "1 Dundas St W, Toronto";
+  el.driverNotes.value = "Start downtown, work north first, take gas near the midpoint, then finish west if traffic gets heavy.";
   el.tripDays.value = "2";
   el.maxHours.value = "7.5";
   el.serviceMinutes.value = "8";
-  setStops(sampleStops.map(([address, zone]) => ({ address, zone })));
+  setStops(sampleStops.map(([address, zone]) => {
+    const parsed = stopFromTextLine(address);
+    return { ...parsed, zone };
+  }));
   state.visibleSlots = 20;
   updateVisibleSlots();
   setAssistant("Sample delivery board loaded across central, north, west, east, and south districts.");
@@ -290,7 +393,7 @@ function fillSample() {
 }
 
 function compactStops() {
-  const stops = getStops().map(({ address, zone }) => ({ address, zone }));
+  const stops = getStops().map(({ postalCode, address, city, zone }) => ({ postalCode, address, city, zone }));
   setStops(stops);
   showToast("Blank rows removed from the active stop sequence.");
 }
@@ -300,18 +403,25 @@ function moveStop(index, delta) {
   const target = index + delta;
   if (target < 0 || target >= rows.length) return;
 
-  const currentInput = rows[index].querySelector(".slot-input");
+  const currentPostal = rows[index].querySelector(".slot-postal");
+  const currentAddress = rows[index].querySelector(".slot-address");
+  const currentCity = rows[index].querySelector(".slot-city");
   const currentZone = rows[index].querySelector(".slot-zone");
-  const targetInput = rows[target].querySelector(".slot-input");
+  const targetPostal = rows[target].querySelector(".slot-postal");
+  const targetAddress = rows[target].querySelector(".slot-address");
+  const targetCity = rows[target].querySelector(".slot-city");
   const targetZone = rows[target].querySelector(".slot-zone");
 
-  [currentInput.value, targetInput.value] = [targetInput.value, currentInput.value];
+  [currentPostal.value, targetPostal.value] = [targetPostal.value, currentPostal.value];
+  [currentAddress.value, targetAddress.value] = [targetAddress.value, currentAddress.value];
+  [currentCity.value, targetCity.value] = [targetCity.value, currentCity.value];
   [currentZone.value, targetZone.value] = [targetZone.value, currentZone.value];
   updateCounters();
 }
 
 function clearPlan() {
   el.startAddress.value = "";
+  el.driverNotes.value = "";
   el.bulkAddresses.value = "";
   el.tripDays.value = "1";
   el.maxHours.value = "8";
@@ -374,15 +484,16 @@ function orderByNearest(stops) {
 }
 
 function orderByDistrict(stops) {
+  const preferredOrder = preferredDistrictOrder();
   return [...stops].sort((a, b) => {
-    const districtDiff = districtOrder.indexOf(a.zone) - districtOrder.indexOf(b.zone);
+    const districtDiff = preferredOrder.indexOf(a.zone) - preferredOrder.indexOf(b.zone);
     if (districtDiff !== 0) return districtDiff;
     return a.coords.y - b.coords.y || a.coords.x - b.coords.x;
   });
 }
 
 function orderBalanced(stops) {
-  const grouped = districtOrder.map((zone) => stops.filter((stop) => stop.zone === zone));
+  const grouped = preferredDistrictOrder().map((zone) => stops.filter((stop) => stop.zone === zone));
   const ordered = [];
   let added = true;
 
@@ -397,6 +508,18 @@ function orderBalanced(stops) {
   }
 
   return ordered;
+}
+
+function preferredDistrictOrder() {
+  const notes = el.driverNotes.value.toLowerCase();
+  const requested = [];
+  if (/\bnorth\b|north[-\s]?west|north[-\s]?east/.test(notes)) requested.push("north");
+  if (/\bwest\b|north[-\s]?west|south[-\s]?west/.test(notes)) requested.push("west");
+  if (/\beast\b|north[-\s]?east|south[-\s]?east/.test(notes)) requested.push("east");
+  if (/\bsouth\b|south[-\s]?west|south[-\s]?east/.test(notes)) requested.push("south");
+  if (/\bcentral\b|downtown|center|centre/.test(notes)) requested.push("central");
+
+  return [...new Set([...requested, ...districtOrder])];
 }
 
 function distance(a, b) {
@@ -503,7 +626,7 @@ function renderDayPlan(route) {
   }
 
   el.dayPlan.innerHTML = route.days.map((day) => {
-    const names = day.stops.map((stop, index) => `<span>${index + 1}. ${escapeHtml(shortAddress(stop.address))}</span>`).join("");
+    const names = day.stops.map((stop, index) => `<span>${index + 1}. ${escapeHtml(shortAddress(displayAddress(stop)))}</span>`).join("");
     const status = day.overLimit ? "Over daily limit" : "On pace";
     return `
       <article class="day-card">
@@ -582,8 +705,7 @@ function renderMap(route) {
   el.mapPreview.querySelectorAll(".map-node, .map-line").forEach((node) => node.remove());
 
   if (!route) {
-    el.mapStatus.textContent = "Ready";
-    el.googlePreview.src = "https://www.google.com/maps?q=United%20States&output=embed";
+    renderDraftPins();
     return;
   }
 
@@ -595,12 +717,46 @@ function renderMap(route) {
     node.textContent = point.start ? "S" : String(index);
     node.style.left = `${point.coords.x}%`;
     node.style.top = `${point.coords.y}%`;
-    node.title = point.address;
+    node.title = displayAddress(point) || point.address;
     el.mapPreview.appendChild(node);
   });
 
   el.mapStatus.textContent = `${Math.min(route.stops.length, 18)} shown`;
-  el.googlePreview.src = `https://www.google.com/maps?q=${encodeURIComponent(route.stops[0]?.address || el.startAddress.value)}&output=embed`;
+  el.mapHint.textContent = `Route preview: ${Math.min(route.stops.length, 18)} stop${route.stops.length === 1 ? "" : "s"} shown.`;
+  el.googlePreview.src = `https://www.google.com/maps?q=${encodeURIComponent(displayAddress(route.stops[0]) || el.startAddress.value)}&output=embed`;
+}
+
+function renderDraftPins() {
+  el.mapPreview.querySelectorAll(".map-node, .map-line").forEach((node) => node.remove());
+  const stops = getStops();
+  const start = el.startAddress.value.trim();
+
+  if (start) {
+    const startNode = document.createElement("span");
+    startNode.className = "map-node start";
+    startNode.textContent = "S";
+    startNode.style.left = "50%";
+    startNode.style.top = "50%";
+    startNode.title = start;
+    el.mapPreview.appendChild(startNode);
+  }
+
+  stops.slice(0, 60).forEach((stop, index) => {
+    const node = document.createElement("span");
+    node.className = "map-node draft";
+    node.textContent = String(index + 1);
+    node.style.left = `${stop.coords.x}%`;
+    node.style.top = `${stop.coords.y}%`;
+    node.title = displayAddress(stop);
+    el.mapPreview.appendChild(node);
+  });
+
+  el.mapStatus.textContent = stops.length ? `${stops.length} pinned` : "Ready";
+  el.mapHint.textContent = stops.length
+    ? `${stops.length} draft pin${stops.length === 1 ? "" : "s"} placed before routing.`
+    : "Pins appear here as you type addresses.";
+  const previewTarget = displayAddress(stops[0]) || start || "United States";
+  el.googlePreview.src = `https://www.google.com/maps?q=${encodeURIComponent(previewTarget)}&output=embed`;
 }
 
 function drawLine(from, to) {
@@ -624,21 +780,27 @@ function renderGuidance(route) {
   const first = route.stops[0];
   const midpoint = route.stops[Math.floor(route.stops.length / 2)];
   const last = route.stops[route.stops.length - 1];
+  const notes = el.driverNotes.value.trim();
   const firstBreak = route.driveMinutes > 180
     ? "Schedule gas or food after the first long cluster, before the midpoint."
     : "Keep the first fuel or food stop after the opening cluster unless the driver starts low.";
+  const pitStopAdvice = /pit|gas|fuel|food|coffee|break|stop/i.test(notes)
+    ? "I found pit-stop notes, so check the convenience cards before leaving and again near the midpoint."
+    : null;
 
   el.assistantList.innerHTML = [
-    `Start with ${shortAddress(first.address)}. Confirm live traffic in Google before departure.`,
+    ...(notes ? [`Driver notes: ${notes}`] : []),
+    `Start with ${shortAddress(displayAddress(first))}. Confirm live traffic in Google before departure.`,
+    ...(pitStopAdvice ? [pitStopAdvice] : []),
     firstBreak,
-    `Mid-route check near ${shortAddress(midpoint.address)}. If delayed, move low-priority stops to the next day.`,
-    `Finish toward ${shortAddress(last.address)}${el.returnToStart.checked ? " and navigate back to start" : ""}.`,
+    `Mid-route check near ${shortAddress(displayAddress(midpoint))}. If delayed, move low-priority stops to the next day.`,
+    `Finish toward ${shortAddress(displayAddress(last))}${el.returnToStart.checked ? " and navigate back to start" : ""}.`,
   ].map((item) => `<li>${escapeHtml(item)}</li>`).join("");
 
-  const breakAnchor = midpoint?.address || first.address;
-  const gasAnchor = route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.35)))]?.address || breakAnchor;
-  const foodAnchor = route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.55)))]?.address || breakAnchor;
-  const coffeeAnchor = route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.72)))]?.address || breakAnchor;
+  const breakAnchor = displayAddress(midpoint) || displayAddress(first);
+  const gasAnchor = displayAddress(route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.35)))]) || breakAnchor;
+  const foodAnchor = displayAddress(route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.55)))]) || breakAnchor;
+  const coffeeAnchor = displayAddress(route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.72)))]) || breakAnchor;
 
   el.assistantCards.innerHTML = [
     {
@@ -667,8 +829,8 @@ function renderGuidance(route) {
 
 function googleRouteUrl(stops) {
   const start = el.startAddress.value.trim();
-  const destination = stops[stops.length - 1]?.address || start;
-  const waypoints = stops.slice(0, -1).map((stop) => stop.address).slice(0, 23);
+  const destination = displayAddress(stops[stops.length - 1]) || start;
+  const waypoints = stops.slice(0, -1).map((stop) => displayAddress(stop)).slice(0, 23);
   const params = new URLSearchParams({
     api: "1",
     travelmode: "driving",
@@ -700,7 +862,7 @@ function chunkStopsForGoogle(stops) {
 }
 
 function wazeRouteUrl(stop) {
-  const address = stop?.address || el.startAddress.value.trim();
+  const address = displayAddress(stop) || el.startAddress.value.trim();
   return `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
 }
 
@@ -723,11 +885,13 @@ async function copySelectedManifest() {
     return;
   }
 
+  const notes = el.driverNotes.value.trim();
   const manifest = [
     `RoutePilot manifest: ${route.name}`,
     `Total: ${formatMinutes(route.totalMinutes)} | Drive: ${formatMinutes(route.driveMinutes)} | Distance: ${route.totalMiles} mi`,
     `Start: ${el.startAddress.value.trim()}`,
-    ...route.stops.map((stop, index) => `${index + 1}. ${stop.address} [${stop.zone}]`),
+    ...(notes ? [`Notes: ${notes}`] : []),
+    ...route.stops.map((stop, index) => `${index + 1}. ${displayAddress(stop)} [${stop.zone}]`),
   ].join("\n");
 
   await navigator.clipboard.writeText(manifest);
@@ -741,7 +905,7 @@ function exportCsv() {
     return;
   }
 
-  const rows = [["slot", "address", "district"], ...stops.map((stop, index) => [index + 1, stop.address, stop.zone])];
+  const rows = [["slot", "postal_code", "address", "city", "district"], ...stops.map((stop, index) => [index + 1, stop.postalCode, stop.address, stop.city, stop.zone])];
   const csv = rows.map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
   const link = document.createElement("a");
@@ -754,13 +918,14 @@ function exportCsv() {
 function savePlan() {
   const plan = {
     start: el.startAddress.value,
+    notes: el.driverNotes.value,
     days: el.tripDays.value,
     maxHours: el.maxHours.value,
     serviceMinutes: el.serviceMinutes.value,
     departTime: el.departTime.value,
     returnToStart: el.returnToStart.checked,
     traffic: state.traffic,
-    stops: getStops().map(({ address, zone }) => ({ address, zone })),
+    stops: getStops().map(({ postalCode, address, city, zone }) => ({ postalCode, address, city, zone })),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(plan));
   showToast("Plan saved in this browser.");
@@ -773,6 +938,7 @@ function loadPlan() {
   try {
     const plan = JSON.parse(saved);
     el.startAddress.value = plan.start || "";
+    el.driverNotes.value = plan.notes || "";
     el.tripDays.value = plan.days || "1";
     el.maxHours.value = plan.maxHours || "8";
     el.serviceMinutes.value = plan.serviceMinutes || "6";
@@ -797,6 +963,20 @@ function updateCounters() {
   el.dayCounter.textContent = `${days} day${days === 1 ? "" : "s"}`;
   el.routeCounter.textContent = `${state.routes.length} route${state.routes.length === 1 ? "" : "s"}`;
   updateVisibleSlots();
+  if (!state.routes.length) renderDraftPins();
+}
+
+function handleDraftInput() {
+  state.routes = [];
+  state.selectedRouteId = null;
+  renderEmptyRoutes();
+  const stops = getStops();
+  if (stops.length) {
+    const notes = el.driverNotes.value.trim();
+    setAssistant(notes
+      ? `Draft pins are on the map. I will use your notes about ${shortAddress(notes)} when ranking the trip.`
+      : "Draft pins are on the map as you type. Add notes or optimize when ready.");
+  }
 }
 
 function setAssistant(message) {
@@ -819,6 +999,11 @@ function formatMinutes(minutes) {
 
 function shortAddress(address) {
   return address.length > 34 ? `${address.slice(0, 31)}...` : address;
+}
+
+function displayAddress(stop) {
+  if (!stop) return "";
+  return stop.fullAddress || formatFullAddress(stop) || stop.address || "";
 }
 
 function escapeHtml(value) {

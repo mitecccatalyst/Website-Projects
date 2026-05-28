@@ -8,6 +8,9 @@ test.describe("RoutePilot planner", () => {
   test("loads with 60 slots but shows 10 first", async ({ page }) => {
     await expect(page.locator(".slot-row")).toHaveCount(60);
     await expect(page.locator(".slot-row:not(.slot-hidden)")).toHaveCount(10);
+    await expect(page.locator(".slot-postal")).toHaveCount(60);
+    await expect(page.locator(".slot-address")).toHaveCount(60);
+    await expect(page.locator(".slot-city")).toHaveCount(60);
   });
 
   test("sample creates 3 normal routes and 2 busy routes", async ({ page }) => {
@@ -29,5 +32,20 @@ test.describe("RoutePilot planner", () => {
     await page.getByRole("button", { name: "Optimize routes" }).click();
     await expect(page.locator("#stopCounter")).toHaveText("60 stops");
     await expect(page.locator(".segment-links a")).toHaveCount(3);
+  });
+
+  test("mixed pasted addresses create structured rows and draft pins", async ({ page }) => {
+    await page.locator("#bulkAddresses").fill([
+      "- 123 Main St, Toronto, M5V 2T6",
+      "45 Market Ave | Etobicoke | M9W 5L2",
+      "900 North Road Toronto ON M4M 1A1",
+    ].join("\n"));
+    await page.getByRole("button", { name: "Fill slots" }).click();
+
+    await expect(page.locator("#stopCounter")).toHaveText("3 stops");
+    await expect(page.locator(".slot-address").first()).toHaveValue("123 Main St");
+    await expect(page.locator(".slot-city").first()).toHaveValue("Toronto");
+    await expect(page.locator(".slot-postal").first()).toHaveValue("M5V 2T6");
+    await expect(page.locator(".map-node.draft")).toHaveCount(3);
   });
 });

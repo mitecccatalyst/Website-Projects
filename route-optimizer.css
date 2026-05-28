@@ -500,17 +500,29 @@ main {
 
 .slot-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   max-height: 650px;
   overflow: auto;
   padding-right: 4px;
 }
 
+.slot-header {
+  display: grid;
+  grid-template-columns: 34px 112px minmax(210px, 1.25fr) minmax(130px, 0.7fr) 92px 80px;
+  gap: 8px;
+  margin: 0 4px 8px 0;
+  padding: 0 8px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
 .slot-row {
   display: grid;
-  grid-template-columns: 30px minmax(120px, 1fr) 84px 38px 38px;
-  gap: 6px;
+  grid-template-columns: 34px 112px minmax(210px, 1.25fr) minmax(130px, 0.7fr) 92px 36px 36px;
+  gap: 8px;
   align-items: center;
   min-height: 50px;
   border: 1px solid var(--line);
@@ -533,7 +545,9 @@ main {
   font-size: 11px;
 }
 
-.slot-input,
+.slot-address,
+.slot-postal,
+.slot-city,
 .slot-zone {
   height: 34px;
   font-size: 12px;
@@ -579,7 +593,7 @@ main {
 
 .route-options {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
@@ -741,6 +755,21 @@ main {
     linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
 }
 
+.map-hint {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  max-width: calc(100% - 28px);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 7px 10px;
+  color: var(--muted);
+  background: rgba(7, 9, 8, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 .map-grid {
   position: absolute;
   inset: 0;
@@ -769,6 +798,11 @@ main {
 .map-node.start {
   background: var(--amber);
   box-shadow: 0 0 0 7px rgba(244, 201, 107, 0.13);
+}
+
+.map-node.draft {
+  background: var(--blue);
+  box-shadow: 0 0 0 7px rgba(116, 184, 255, 0.14);
 }
 
 .map-line {
@@ -958,7 +992,6 @@ main {
   }
 
   .slot-grid,
-  .route-options,
   .map-panel {
     grid-template-columns: 1fr;
   }
@@ -968,8 +1001,8 @@ main {
     grid-column: auto;
   }
 
-  .route-options {
-    display: grid;
+  .slot-header {
+    display: none;
   }
 }
 
@@ -994,7 +1027,15 @@ main {
   }
 
   .slot-row {
-    grid-template-columns: 28px minmax(0, 1fr) 72px;
+    grid-template-columns: 28px 1fr;
+    align-items: stretch;
+  }
+
+  .slot-postal,
+  .slot-address,
+  .slot-city,
+  .slot-zone {
+    grid-column: 2;
   }
 
   .move-up,
