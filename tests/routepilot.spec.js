@@ -120,4 +120,20 @@ test.describe("RoutePilot planner", () => {
     await expect(page.locator(".route-card").first()).toContainText("Live Google traffic: 42m drive, 18 mi.");
     await expect(page.locator("#assistantMessage")).toContainText("Live Google traffic is active");
   });
+
+  test("privacy and terms pages are linked and load", async ({ page }) => {
+    const primaryNav = page.getByLabel("Primary");
+    await expect(primaryNav.getByRole("link", { name: "Privacy", exact: true })).toBeVisible();
+    await expect(primaryNav.getByRole("link", { name: "Terms", exact: true })).toBeVisible();
+
+    await page.goto("/privacy.html");
+    await expect(page).toHaveTitle(/Privacy Policy/);
+    await expect(page.getByRole("heading", { name: "Your route data should stay under your control." })).toBeVisible();
+    await expect(page.getByText("RoutePilot is local-first")).toBeVisible();
+
+    await page.goto("/terms.html");
+    await expect(page).toHaveTitle(/Terms Of Use/);
+    await expect(page.getByRole("heading", { name: "Plan smarter, but drive with judgment." })).toBeVisible();
+    await expect(page.getByText("RoutePilot is a planning tool")).toBeVisible();
+  });
 });

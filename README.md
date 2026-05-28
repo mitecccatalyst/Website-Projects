@@ -55,7 +55,7 @@ The goal is practical: fewer wasted miles, fewer confusing route decisions, and 
 | Exact pin mode | Optional secure backend verifies real Google pins without exposing the Google key in the browser. |
 | Live traffic times | Optional secure backend calls Google Routes API for current drive duration and distance. |
 | Mobile-friendly UI | Works on phones, tablets, and laptops. |
-| Privacy notice | Explains that saved plans stay in the browser. |
+| Privacy and terms pages | Explains data handling, driver responsibility, and third-party map limits. |
 
 ## Run Locally
 
@@ -164,6 +164,8 @@ package.json
 netlify.toml
 manifest.webmanifest
 sw.js
+privacy.html
+terms.html
 netlify/
   functions/
     google-geocode.js

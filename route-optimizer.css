@@ -389,6 +389,26 @@ main {
   margin-top: 14px;
 }
 
+.legal-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.legal-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .mini-status {
   margin-top: 12px !important;
   color: var(--amber) !important;
@@ -1007,6 +1027,93 @@ main {
   padding: 26px;
   color: var(--muted);
   text-align: center;
+}
+
+.document-page {
+  max-width: 980px;
+}
+
+.document-hero {
+  margin: 34px 0 18px;
+}
+
+.document-hero h1 {
+  margin: 0;
+  font-size: clamp(36px, 6vw, 72px);
+  line-height: 0.95;
+}
+
+.document-hero p {
+  max-width: 760px;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.document-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.document-section h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.document-section h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.document-section p,
+.document-section li {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.58;
+}
+
+.document-section p,
+.document-section ul {
+  margin: 0;
+}
+
+.document-section ul {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.document-callout {
+  border: 1px solid rgba(244, 201, 107, 0.3);
+  border-radius: var(--radius);
+  padding: 14px;
+  color: var(--ink);
+  background: rgba(244, 201, 107, 0.09);
+}
+
+.document-footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 18px 0 0;
+}
+
+.document-footer a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  border-radius: var(--radius);
+  padding: 0 14px;
+  color: #07100c;
+  background: var(--mint);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 @keyframes gridDrift {

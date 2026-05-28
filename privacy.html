@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy | RoutePilot</title>
+  <meta
+    name="description"
+    content="RoutePilot privacy policy for local route planning, saved address data, voice input, Google Maps, Waze, and optional backend map services."
+  >
+  <meta name="theme-color" content="#070908">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+    rel="stylesheet"
+  >
+  <link rel="stylesheet" href="./route-optimizer.css">
+</head>
+<body>
+  <div class="motion-field" aria-hidden="true">
+    <div class="moving-grid"></div>
+    <div class="road road-one"></div>
+    <div class="road road-two"></div>
+    <div class="road road-three"></div>
+  </div>
+
+  <header class="topbar">
+    <a class="brand" href="./index.html" aria-label="RoutePilot planner">
+      <span class="brand-mark">RP</span>
+      <span>
+        <strong>RoutePilot</strong>
+        <small>Privacy</small>
+      </span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="./index.html">Planner</a>
+      <a href="./privacy.html">Privacy</a>
+      <a href="./terms.html">Terms</a>
+    </nav>
+  </header>
+
+  <main class="document-page">
+    <section class="document-hero">
+      <p class="kicker">RoutePilot privacy policy</p>
+      <h1>Your route data should stay under your control.</h1>
+      <p>Last updated: May 28, 2026. This policy explains what RoutePilot stores, what it sends out, and what drivers should know before using external map services.</p>
+    </section>
+
+    <section class="document-section">
+      <h2>Plain-English Summary</h2>
+      <p class="document-callout">RoutePilot is local-first. Most route planning happens inside your browser. Address data is sent outside the browser only when you choose features that need outside map services, such as Google Maps, Waze, exact pin verification, or live traffic times.</p>
+    </section>
+
+    <section class="document-section">
+      <h2>Information You Enter</h2>
+      <p>RoutePilot may process information you type, paste, import, or speak into the app, including:</p>
+      <ul>
+        <li>Start address.</li>
+        <li>Delivery stop addresses, cities, postal codes, and districts.</li>
+        <li>Driver notes, route notes, pit stop notes, and voice-transcript text.</li>
+        <li>Trip settings such as days, max hours per day, stop time, return-to-start setting, and traffic mode.</li>
+      </ul>
+    </section>
+
+    <section class="document-section">
+      <h2>Local Browser Storage</h2>
+      <p>When you click Save plan, RoutePilot stores the plan in this browser using local storage. Exact pin results may also be cached in this browser so the same address does not need to be verified again.</p>
+      <p>You can remove saved browser data with the Delete saved data button inside the app. Clearing your browser storage can also remove saved RoutePilot data.</p>
+    </section>
+
+    <section class="document-section">
+      <h2>Voice Assistant</h2>
+      <p>The voice feature uses browser speech recognition when supported by the device and browser. RoutePilot receives the transcript text and uses it as route notes. Browser speech recognition may be handled by the browser provider, so check your browser's own privacy settings and terms.</p>
+    </section>
+
+    <section class="document-section">
+      <h2>Google Maps, Waze, And Backend Map Services</h2>
+      <p>When you open a Google Maps or Waze link, those services receive the route or stop information needed to open navigation.</p>
+      <p>If a secure backend is connected, exact pin verification and live traffic times send addresses or coordinates to that backend. The backend then calls Google Maps Platform services using a private server-side API key. RoutePilot does not place that private key in the browser.</p>
+    </section>
+
+    <section class="document-section">
+      <h2>What RoutePilot Does Not Do</h2>
+      <ul>
+        <li>RoutePilot does not require a user account in this version.</li>
+        <li>RoutePilot does not sell address lists.</li>
+        <li>RoutePilot does not include advertising trackers in this version.</li>
+        <li>RoutePilot does not guarantee that third-party map providers will handle data under this policy.</li>
+      </ul>
+    </section>
+
+    <section class="document-section">
+      <h2>Driver Safety And Sensitive Data</h2>
+      <p>Do not enter private notes that are not needed for route planning. Do not enter passwords, payment details, private medical details, or other highly sensitive information into route notes.</p>
+    </section>
+
+    <section class="document-section">
+      <h2>Contact And Changes</h2>
+      <p>This project is maintained through the GitHub repository. Privacy updates may be made as the app adds hosting, backend services, accounts, or collaboration features.</p>
+      <div class="document-footer">
+        <a href="./index.html">Back to planner</a>
+        <a href="./terms.html">Read terms</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

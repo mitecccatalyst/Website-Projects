@@ -2,6 +2,8 @@ const ROUTEPILOT_CACHE = "routepilot-v1";
 const CORE_ASSETS = [
   "./",
   "./index.html",
+  "./privacy.html",
+  "./terms.html",
   "./route-optimizer.css",
   "./route-optimizer.js",
   "./manifest.webmanifest",
