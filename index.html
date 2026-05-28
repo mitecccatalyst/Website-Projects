@@ -130,20 +130,21 @@
         <section class="panel map-accuracy-panel">
           <div class="panel-heading compact">
             <p class="kicker">Map accuracy</p>
-            <h2>Exact pins when enabled</h2>
+            <h2>Secure Google proxy</h2>
           </div>
           <p>
-            Preview pins appear instantly. Exact Google pins need a Maps key saved on this device.
+            Preview pins appear instantly. Exact pins and live traffic use a private backend key.
           </p>
           <label class="field">
-            <span>Google Maps API key</span>
-            <input id="googleApiKey" type="password" autocomplete="off" placeholder="Optional key for exact pins">
+            <span>Backend URL</span>
+            <input id="mapProxyBase" type="url" autocomplete="off" placeholder="Same site, or https://your-netlify-site.netlify.app">
           </label>
           <div class="button-row">
-            <button class="secondary-button" id="saveGoogleKeyButton" type="button">Save key</button>
+            <button class="secondary-button" id="saveMapProxyButton" type="button">Save backend</button>
             <button class="ghost-button" id="verifyPinsButton" type="button">Verify exact pins</button>
+            <button class="ghost-button" id="refreshTrafficButton" type="button">Get live times</button>
           </div>
-          <p class="mini-status" id="geocodeStatus">Using instant preview pins.</p>
+          <p class="mini-status" id="geocodeStatus">Using instant preview pins until the backend is connected.</p>
         </section>
 
         <section class="panel">

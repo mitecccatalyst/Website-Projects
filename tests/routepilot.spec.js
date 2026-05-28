@@ -62,12 +62,12 @@ test.describe("RoutePilot planner", () => {
     await expect(page.locator(".route-card")).toHaveCount(2);
   });
 
-  test("launch controls include PWA manifest, exact pin setup, and saved data clearing", async ({ page }) => {
+  test("launch controls include PWA manifest, secure proxy setup, and saved data clearing", async ({ page }) => {
     await expect(page.locator("link[rel='manifest']")).toHaveAttribute("href", "./manifest.webmanifest");
-    await expect(page.locator("#googleApiKey")).toBeVisible();
+    await expect(page.locator("#mapProxyBase")).toBeVisible();
 
     await page.getByRole("button", { name: "Verify exact pins" }).click();
-    await expect(page.locator("#geocodeStatus")).toContainText("Add a Google Maps API key");
+    await expect(page.locator("#geocodeStatus")).toContainText("backend");
 
     await page.locator("#startAddress").fill("1 Dundas St W, Toronto");
     await page.locator(".slot-address").first().fill("123 Main St");
@@ -75,5 +75,49 @@ test.describe("RoutePilot planner", () => {
     await page.getByRole("button", { name: "Save plan" }).click();
     await page.getByRole("button", { name: "Delete saved data" }).click();
     await expect(page.locator("#assistantMessage")).toContainText("Saved browser data is deleted");
+  });
+
+  test("secure proxy can provide exact pins and live traffic times", async ({ page }) => {
+    await page.route("**/.netlify/functions/google-geocode", async (route) => {
+      const request = route.request().postDataJSON();
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          configured: true,
+          results: request.addresses.map((query, index) => ({
+            query,
+            status: "OK",
+            formatted: query,
+            lat: 43.65 + index * 0.01,
+            lng: -79.38 - index * 0.01,
+          })),
+        }),
+      });
+    });
+
+    await page.route("**/.netlify/functions/google-route", async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        body: JSON.stringify({
+          configured: true,
+          source: "google-routes-api",
+          durationMinutes: 42,
+          staticDurationMinutes: 35,
+          trafficDelayMinutes: 7,
+          distanceMiles: 18,
+          segmentCount: 1,
+        }),
+      });
+    });
+
+    await page.locator("#startAddress").fill("1 Dundas St W, Toronto");
+    await page.locator("#bulkAddresses").fill("123 Main St, Toronto, M5V 2T6\n45 Market Ave, Toronto, M4M 1A1");
+    await page.getByRole("button", { name: "Fill slots" }).click();
+    await page.getByRole("button", { name: "Optimize routes" }).click();
+    await page.getByRole("button", { name: "Get live times" }).click();
+
+    await expect(page.locator(".map-node.exact")).toHaveCount(2);
+    await expect(page.locator(".route-card").first()).toContainText("Live Google traffic: 42m drive, 18 mi.");
+    await expect(page.locator("#assistantMessage")).toContainText("Live Google traffic is active");
   });
 });

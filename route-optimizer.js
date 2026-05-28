@@ -1,6 +1,6 @@
 const MAX_STOPS = 60;
 const STORAGE_KEY = "routePilotPlan";
-const GOOGLE_KEY_STORAGE = "routePilotGoogleMapsKey";
+const MAP_PROXY_STORAGE = "routePilotMapProxyBase";
 const GEOCODE_CACHE_STORAGE = "routePilotGeocodeCache";
 
 const state = {
@@ -10,7 +10,7 @@ const state = {
   visibleSlots: 10,
   recognition: null,
   listening: false,
-  googleReady: false,
+  mapProxyReady: false,
   geocodeCache: loadGeocodeCache(),
 };
 
@@ -72,9 +72,10 @@ const el = {
   toast: document.querySelector("#toast"),
   addSlotsButton: document.querySelector("#addSlotsButton"),
   csvImport: document.querySelector("#csvImport"),
-  googleApiKey: document.querySelector("#googleApiKey"),
-  saveGoogleKeyButton: document.querySelector("#saveGoogleKeyButton"),
+  mapProxyBase: document.querySelector("#mapProxyBase"),
+  saveMapProxyButton: document.querySelector("#saveMapProxyButton"),
   verifyPinsButton: document.querySelector("#verifyPinsButton"),
+  refreshTrafficButton: document.querySelector("#refreshTrafficButton"),
   geocodeStatus: document.querySelector("#geocodeStatus"),
   clearSavedDataButton: document.querySelector("#clearSavedDataButton"),
 };
@@ -120,8 +121,9 @@ function bindEvents() {
   document.querySelector("#openSelectedGoogle").addEventListener("click", openSelectedGoogle);
   document.querySelector("#copySelected").addEventListener("click", copySelectedManifest);
   document.querySelector("#csvImport").addEventListener("change", importCsvFile);
-  el.saveGoogleKeyButton.addEventListener("click", saveGoogleApiKey);
+  el.saveMapProxyButton.addEventListener("click", saveMapProxyBase);
   el.verifyPinsButton.addEventListener("click", verifyExactPins);
+  el.refreshTrafficButton.addEventListener("click", () => refreshLiveTraffic());
   el.voiceAgentButton.addEventListener("click", toggleVoiceAgent);
   el.analyzeVoiceButton.addEventListener("click", () => analyzeVoiceRequest(el.voiceTranscript.value));
 
@@ -354,40 +356,31 @@ function numberWord(word) {
 }
 
 function loadGoogleSettings() {
-  const savedKey = localStorage.getItem(GOOGLE_KEY_STORAGE) || "";
-  el.googleApiKey.value = savedKey;
-  if (savedKey) {
-    el.geocodeStatus.textContent = "Google key saved on this device. Exact pins are ready to verify.";
-  }
+  const savedBase = localStorage.getItem(MAP_PROXY_STORAGE) || "";
+  el.mapProxyBase.value = savedBase;
+  el.geocodeStatus.textContent = savedBase
+    ? "Backend saved. Exact pins and live times can use the secure Google proxy."
+    : "Using instant preview pins until the backend is connected.";
 }
 
-function saveGoogleApiKey() {
-  const key = el.googleApiKey.value.trim();
-  if (!key) {
-    localStorage.removeItem(GOOGLE_KEY_STORAGE);
-    state.googleReady = false;
-    el.geocodeStatus.textContent = "Google key removed. Using instant preview pins.";
-    showToast("Google key removed from this browser.");
+function saveMapProxyBase() {
+  const base = sanitizeProxyBase(el.mapProxyBase.value);
+  if (!base) {
+    localStorage.removeItem(MAP_PROXY_STORAGE);
+    state.mapProxyReady = false;
+    el.mapProxyBase.value = "";
+    el.geocodeStatus.textContent = "Using same-site backend if available.";
+    showToast("Backend setting cleared.");
     return;
   }
 
-  localStorage.setItem(GOOGLE_KEY_STORAGE, key);
-  el.geocodeStatus.textContent = "Google key saved on this device. Tap Verify exact pins.";
-  showToast("Google key saved locally.");
+  localStorage.setItem(MAP_PROXY_STORAGE, base);
+  el.mapProxyBase.value = base;
+  el.geocodeStatus.textContent = "Backend saved. Tap Verify exact pins or Get live times.";
+  showToast("Backend URL saved.");
 }
 
-async function verifyExactPins() {
-  const key = localStorage.getItem(GOOGLE_KEY_STORAGE) || el.googleApiKey.value.trim();
-  if (!key) {
-    el.geocodeStatus.textContent = "Add a Google Maps API key to verify exact pins.";
-    showToast("Exact pins need a Google Maps API key.");
-    return;
-  }
-
-  if (el.googleApiKey.value.trim() && !localStorage.getItem(GOOGLE_KEY_STORAGE)) {
-    localStorage.setItem(GOOGLE_KEY_STORAGE, el.googleApiKey.value.trim());
-  }
-
+async function verifyExactPins(options = {}) {
   const stops = getStops();
   if (!stops.length && !el.startAddress.value.trim()) {
     showToast("Add addresses before verifying pins.");
@@ -395,78 +388,47 @@ async function verifyExactPins() {
   }
 
   el.verifyPinsButton.disabled = true;
-  el.geocodeStatus.textContent = "Loading Google geocoder...";
+  el.geocodeStatus.textContent = "Asking secure backend for exact pins...";
 
   try {
-    await loadGoogleMapsScript(key);
-    state.googleReady = true;
     const targets = [
       ...(el.startAddress.value.trim() ? [{ fullAddress: el.startAddress.value.trim(), start: true }] : []),
       ...stops,
     ];
+    const uncachedAddresses = targets
+      .map((target) => target.fullAddress || displayAddress(target))
+      .filter((address) => address && !getCachedGeocode(address));
 
-    let verified = 0;
-    for (const target of targets) {
-      const address = target.fullAddress || displayAddress(target);
-      if (!address || getCachedGeocode(address)) {
-        if (address) verified += 1;
-        continue;
-      }
-      el.geocodeStatus.textContent = `Verifying pin ${verified + 1} of ${targets.length}...`;
-      const result = await geocodeWithGoogle(address);
-      if (result) {
-        state.geocodeCache[normalizeAddressKey(address)] = result;
-        verified += 1;
-        saveGeocodeCache();
-      }
-      await wait(140);
+    if (uncachedAddresses.length) {
+      const response = await callMapProxy("google-geocode", { addresses: uncachedAddresses });
+      if (!response.configured) throw new Error(response.error || "Google backend is not configured.");
+      response.results.forEach((result) => {
+        if (result.lat && result.lng) {
+          state.geocodeCache[normalizeAddressKey(result.query)] = {
+            lat: result.lat,
+            lng: result.lng,
+            formatted: result.formatted,
+          };
+        }
+      });
+      saveGeocodeCache();
     }
+
+    const verified = targets
+      .map((target) => target.fullAddress || displayAddress(target))
+      .filter((address) => getCachedGeocode(address)).length;
 
     renderEmptyRoutes();
     el.geocodeStatus.textContent = `${verified} exact pin${verified === 1 ? "" : "s"} verified with Google.`;
-    showToast(`${verified} exact pins verified.`);
+    if (!options.silent) showToast(`${verified} exact pins verified.`);
+    return verified;
   } catch (error) {
-    el.geocodeStatus.textContent = "Exact pins could not be verified. Check the key or API settings.";
-    showToast("Google geocoding did not complete.");
+    el.geocodeStatus.textContent = "Exact pins need a deployed backend with GOOGLE_MAPS_API_KEY.";
+    if (!options.silent) showToast("Google geocoding backend is not connected.");
+    return 0;
   } finally {
     el.verifyPinsButton.disabled = false;
   }
-}
-
-function loadGoogleMapsScript(key) {
-  if (window.google?.maps?.Geocoder) return Promise.resolve();
-  if (window.routePilotGoogleMapsPromise) return window.routePilotGoogleMapsPromise;
-
-  window.routePilotInitGoogle = () => {};
-  window.routePilotGoogleMapsPromise = new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=routePilotInitGoogle`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = reject;
-    document.head.appendChild(script);
-  });
-
-  return window.routePilotGoogleMapsPromise;
-}
-
-function geocodeWithGoogle(address) {
-  return new Promise((resolve) => {
-    const geocoder = new google.maps.Geocoder();
-    geocoder.geocode({ address }, (results, status) => {
-      if (status !== "OK" || !results?.[0]) {
-        resolve(null);
-        return;
-      }
-      const location = results[0].geometry.location;
-      resolve({
-        lat: location.lat(),
-        lng: location.lng(),
-        formatted: results[0].formatted_address,
-      });
-    });
-  });
 }
 
 function getStops() {
@@ -564,6 +526,41 @@ function saveGeocodeCache() {
 
 function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function sanitizeProxyBase(value) {
+  const trimmed = String(value || "").trim().replace(/\/+$/, "");
+  if (!trimmed) return "";
+  try {
+    const url = new URL(trimmed);
+    return url.origin;
+  } catch {
+    return "";
+  }
+}
+
+function mapProxyBase() {
+  const saved = localStorage.getItem(MAP_PROXY_STORAGE);
+  if (saved) return saved;
+  return "";
+}
+
+function mapProxyUrl(functionName) {
+  return `${mapProxyBase()}/.netlify/functions/${functionName}`;
+}
+
+async function callMapProxy(functionName, payload) {
+  const response = await fetch(mapProxyUrl(functionName), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || `Backend request failed: ${response.status}`);
+  }
+  state.mapProxyReady = true;
+  return data;
 }
 
 function updateVisibleSlots() {
@@ -876,6 +873,7 @@ function optimizeRoutes() {
   updateCounters();
   setAssistant(`Best route is ${routes[0].name}: ${formatMinutes(routes[0].totalMinutes)} including stop time. You still choose the final route before opening Maps.`);
   renderGuidance(routes[0]);
+  refreshLiveTraffic({ silent: true });
 }
 
 function orderByNearest(stops) {
@@ -1006,6 +1004,9 @@ function renderRoutes() {
 
 function routeCard(route, index) {
   const active = route.id === state.selectedRouteId ? " active" : "";
+  const liveLine = route.live
+    ? `<p class="live-route">Live Google traffic: ${formatMinutes(route.live.durationMinutes)} drive, ${route.live.distanceMiles} mi.</p>`
+    : "";
   return `
     <article class="route-card${active}">
       <div>
@@ -1019,6 +1020,7 @@ function routeCard(route, index) {
         <div class="metric"><span>Distance</span><strong>${route.totalMiles} mi</strong></div>
       </div>
       <p>${escapeHtml(route.description)} Estimated saving: ${route.gasSavings}.</p>
+      ${liveLine}
       <div class="route-actions">
         <a href="${googleRouteUrl(route.stops)}" target="_blank" rel="noreferrer">Google</a>
         <a href="${wazeRouteUrl(route.stops[0])}" target="_blank" rel="noreferrer">Waze first stop</a>
@@ -1099,6 +1101,70 @@ function selectRoute(routeId) {
 
 function selectedRoute() {
   return state.routes.find((route) => route.id === state.selectedRouteId) || state.routes[0];
+}
+
+async function refreshLiveTraffic(options = {}) {
+  if (!state.routes.length) {
+    if (!options.silent) showToast("Optimize a route first.");
+    return;
+  }
+
+  el.refreshTrafficButton.disabled = true;
+  el.geocodeStatus.textContent = "Checking exact pins before live traffic...";
+
+  try {
+    await verifyExactPins({ silent: true });
+    const originAddress = el.startAddress.value.trim();
+    const originGeocode = getCachedGeocode(originAddress);
+    if (!originGeocode) throw new Error("Start address needs an exact pin.");
+
+    const updatedRoutes = [];
+    for (const route of state.routes) {
+      const stopsWithPins = route.stops.map((stop) => ({
+        ...stop,
+        geocode: getCachedGeocode(displayAddress(stop)) || stop.geocode,
+      }));
+      if (stopsWithPins.some((stop) => !stop.geocode)) continue;
+
+      const live = await callMapProxy("google-route", {
+        origin: { address: originAddress, ...originGeocode },
+        stops: stopsWithPins.map((stop) => ({
+          address: displayAddress(stop),
+          lat: stop.geocode.lat,
+          lng: stop.geocode.lng,
+        })),
+        trafficMode: state.traffic,
+      });
+
+      const serviceTotal = route.stops.length * (Number(el.serviceMinutes.value) || 6);
+      updatedRoutes.push({
+        ...route,
+        stops: stopsWithPins,
+        live,
+        driveMinutes: live.durationMinutes,
+        totalMiles: live.distanceMiles,
+        totalMinutes: live.durationMinutes + serviceTotal,
+        score: live.durationMinutes + live.distanceMiles * 1.8,
+      });
+    }
+
+    if (!updatedRoutes.length) throw new Error("No routes could be refreshed.");
+
+    state.routes = updatedRoutes.sort((a, b) => a.score - b.score);
+    state.selectedRouteId = state.routes[0].id;
+    renderRoutes();
+    renderMap(state.routes[0]);
+    renderGuidance(state.routes[0]);
+    updateCounters();
+    el.geocodeStatus.textContent = `Live Google traffic updated for ${updatedRoutes.length} route${updatedRoutes.length === 1 ? "" : "s"}.`;
+    setAssistant(`Live Google traffic is active. Best route is now ${state.routes[0].name}: ${formatMinutes(state.routes[0].driveMinutes)} drive time.`);
+    if (!options.silent) showToast("Live Google traffic times updated.");
+  } catch (error) {
+    el.geocodeStatus.textContent = "Live traffic needs the secure backend and GOOGLE_MAPS_API_KEY.";
+    if (!options.silent) showToast("Live traffic backend is not connected.");
+  } finally {
+    el.refreshTrafficButton.disabled = false;
+  }
 }
 
 function renderEmptyRoutes() {

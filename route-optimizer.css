@@ -671,6 +671,14 @@ main {
   line-height: 1.45;
 }
 
+.route-card .live-route {
+  border: 1px solid rgba(119, 231, 182, 0.32);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--ink);
+  background: rgba(119, 231, 182, 0.08);
+}
+
 .route-actions {
   display: flex;
   gap: 7px;

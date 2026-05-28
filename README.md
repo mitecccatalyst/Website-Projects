@@ -4,7 +4,7 @@
 
 **RoutePilot helps delivery drivers turn messy stop lists into smarter route plans that can save time, gas, and daily stress.** Paste addresses, compare the fastest route options, split longer delivery runs across multiple days, and open the route in Google Maps or Waze when it is time to drive.
 
-This is a lightweight static web app. No install, no account, no backend, and no database required.
+This is a lightweight web app that can run as a static planner, plus an optional secure Netlify backend for Google exact pins and live traffic times.
 
 ## Why It Matters
 
@@ -23,7 +23,8 @@ Use it to:
 - Split large 25+ stop plans into **Google Maps segments** so the full 60-stop route stays usable.
 - Open the first stop in **Waze** for quick navigation.
 - Install RoutePilot on a phone or laptop with **PWA support**.
-- Verify **exact Google pins** when a Maps key is saved locally on the device.
+- Verify **exact Google pins** through a secure backend proxy.
+- Refresh routes with **live Google traffic times** when the backend is configured.
 - Use the built-in **Road Assistant** for pacing tips, gas/food/coffee searches, and route reminders.
 
 ## Community Pitch
@@ -51,7 +52,8 @@ The goal is practical: fewer wasted miles, fewer confusing route decisions, and 
 | Local save | Stores the plan in the browser with `localStorage`. |
 | CSV export | Downloads the stop list for records or sharing. |
 | PWA install | Lets users add RoutePilot to a phone or laptop home screen. |
-| Exact pin mode | Optional Google geocoding support verifies real map pins when a Maps key is saved locally. |
+| Exact pin mode | Optional secure backend verifies real Google pins without exposing the Google key in the browser. |
+| Live traffic times | Optional secure backend calls Google Routes API for current drive duration and distance. |
 | Mobile-friendly UI | Works on phones, tablets, and laptops. |
 | Privacy notice | Explains that saved plans stay in the browser. |
 
@@ -93,6 +95,28 @@ npm test
 
 The tests check that the app loads, starts with 60 slots, shows 10 slots first, creates route options, switches busy mode to 2 options, and creates Google segments for 60-stop plans.
 
+## Secure Google Backend
+
+RoutePilot includes Netlify Functions for production Google Maps access:
+
+```text
+netlify/functions/google-geocode.js
+netlify/functions/google-route.js
+```
+
+Set this environment variable on Netlify:
+
+```text
+GOOGLE_MAPS_API_KEY=your_server_side_google_key
+```
+
+Enable these Google APIs for that key:
+
+- Geocoding API
+- Routes API
+
+Do not put the Google key in `index.html`, `route-optimizer.js`, GitHub, or browser local storage. The frontend calls the backend functions, and the backend calls Google.
+
 ## Use On A Phone
 
 The easiest phone-friendly setup is GitHub Pages:
@@ -124,9 +148,9 @@ Your phone and laptop must be on the same Wi-Fi network.
 
 ## Current Map Behavior
 
-RoutePilot currently uses a local planning engine for route ranking and organization. It does not call a paid routing API yet. Google Maps and Waze are used as handoff tools for real navigation and live traffic confirmation.
+RoutePilot works without paid APIs by using local preview pins and local route estimates. When the secure backend is deployed with `GOOGLE_MAPS_API_KEY`, the app can verify exact Google pins and refresh route cards with live Google Routes API traffic duration and distance.
 
-The app includes optional exact pin verification with Google Maps. The Maps key is saved only in that browser with `localStorage`; do not commit API keys to the repository. For a larger public launch, move geocoding behind a backend proxy or serverless function so the key is not exposed in browser code.
+Google Maps and Waze are still used as handoff tools for turn-by-turn navigation.
 
 For very large stop lists, Google Maps may limit how many waypoints it opens in a single link. RoutePilot still keeps the full 60-stop plan locally, and the selected route now shows Google Maps segment links so drivers can open the whole route in practical chunks.
 
@@ -137,6 +161,13 @@ index.html
 route-optimizer.css
 route-optimizer.js
 package.json
+netlify.toml
+manifest.webmanifest
+sw.js
+netlify/
+  functions/
+    google-geocode.js
+    google-route.js
 playwright.config.js
 tests/
   routepilot.spec.js
@@ -146,15 +177,14 @@ assets/
 
 ## Roadmap
 
-- Move Google geocoding behind a backend proxy for safer public production use.
-- Add optional Google Maps API integration for live duration estimates.
+- Add a public Netlify production deployment with `GOOGLE_MAPS_API_KEY`.
 - Add smarter waypoint chunking for 25+ Google Maps stops.
 - Add saved route profiles for repeat drivers.
 - Improve CSV column detection for more spreadsheet formats.
 
 ## Privacy
 
-RoutePilot is local-first. Address lists are stored in your browser when you click save. There is no backend server in this version.
+RoutePilot is local-first by default. Address lists are stored in your browser when you click save. If the secure backend is enabled, addresses are sent to the backend only when you verify exact pins or refresh live traffic times.
 
 When you open Google Maps or Waze links, those services handle the navigation data according to their own terms and privacy policies.
 
