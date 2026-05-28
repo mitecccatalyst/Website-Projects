@@ -108,6 +108,17 @@
           </div>
         </section>
 
+        <section class="panel privacy-panel">
+          <div class="panel-heading compact">
+            <p class="kicker">Privacy</p>
+            <h2>Your addresses stay local</h2>
+          </div>
+          <p>
+            RoutePilot saves plans in this browser only. Address data is sent out
+            only when you open Google Maps or Waze.
+          </p>
+        </section>
+
         <section class="panel">
           <div class="panel-heading compact">
             <p class="kicker">Bulk entry</p>
@@ -121,6 +132,10 @@
             <button class="secondary-button" id="importButton" type="button">Fill slots</button>
             <button class="danger-button" id="clearButton" type="button">Clear</button>
           </div>
+          <label class="file-import">
+            <span>Import CSV</span>
+            <input id="csvImport" type="file" accept=".csv,text/csv">
+          </label>
         </section>
 
         <section class="panel agent-panel">
@@ -154,6 +169,7 @@
               <h2>Up to 60 delivery stops</h2>
             </div>
             <div class="board-actions">
+              <button class="ghost-button" id="addSlotsButton" type="button">Show 10 more</button>
               <button class="ghost-button" id="compactButton" type="button">Compact</button>
               <button class="ghost-button" id="exportButton" type="button">Export CSV</button>
             </div>
@@ -223,6 +239,6 @@
     </article>
   </template>
 
-  <script src="./route-optimizer.js"></script>
+  <script type="module" src="./route-optimizer.js"></script>
 </body>
 </html>

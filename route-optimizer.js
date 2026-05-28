@@ -5,6 +5,7 @@ const state = {
   traffic: "normal",
   selectedRouteId: null,
   routes: [],
+  visibleSlots: 10,
 };
 
 const districtCoords = {
@@ -56,6 +57,8 @@ const el = {
   dayCounter: document.querySelector("#dayCounter"),
   routeCounter: document.querySelector("#routeCounter"),
   toast: document.querySelector("#toast"),
+  addSlotsButton: document.querySelector("#addSlotsButton"),
+  csvImport: document.querySelector("#csvImport"),
 };
 
 function init() {
@@ -86,11 +89,13 @@ function bindEvents() {
   document.querySelector("#importButton").addEventListener("click", importBulkAddresses);
   document.querySelector("#clearButton").addEventListener("click", clearPlan);
   document.querySelector("#sampleButton").addEventListener("click", fillSample);
+  document.querySelector("#addSlotsButton").addEventListener("click", showMoreSlots);
   document.querySelector("#compactButton").addEventListener("click", compactStops);
   document.querySelector("#exportButton").addEventListener("click", exportCsv);
   document.querySelector("#savePlanButton").addEventListener("click", savePlan);
   document.querySelector("#openSelectedGoogle").addEventListener("click", openSelectedGoogle);
   document.querySelector("#copySelected").addEventListener("click", copySelectedManifest);
+  document.querySelector("#csvImport").addEventListener("change", importCsvFile);
 
   document.querySelectorAll(".segment").forEach((button) => {
     button.addEventListener("click", () => {
@@ -137,7 +142,25 @@ function setStops(stops) {
     row.querySelector(".slot-input").value = stop?.address || "";
     row.querySelector(".slot-zone").value = stop?.zone || "auto";
   });
+  state.visibleSlots = Math.min(MAX_STOPS, Math.max(10, Math.ceil((stops.length || 1) / 10) * 10));
+  updateVisibleSlots();
   updateCounters();
+}
+
+function updateVisibleSlots() {
+  document.querySelectorAll(".slot-row").forEach((row, index) => {
+    row.classList.toggle("slot-hidden", index >= state.visibleSlots);
+  });
+  el.addSlotsButton.hidden = state.visibleSlots >= MAX_STOPS;
+  el.addSlotsButton.textContent = state.visibleSlots >= MAX_STOPS
+    ? "All slots shown"
+    : `Show 10 more (${state.visibleSlots}/${MAX_STOPS})`;
+}
+
+function showMoreSlots() {
+  state.visibleSlots = Math.min(MAX_STOPS, state.visibleSlots + 10);
+  updateVisibleSlots();
+  showToast(`${state.visibleSlots} of ${MAX_STOPS} slots are visible.`);
 }
 
 function inferDistrict(address) {
@@ -183,12 +206,85 @@ function importBulkAddresses() {
   setAssistant("Bulk stops are loaded. Check the start address, days, and traffic mode before optimizing.");
 }
 
+function importCsvFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const rows = parseCsv(String(reader.result || ""));
+    const addresses = rows
+      .map((row) => findAddressValue(row))
+      .filter(Boolean)
+      .slice(0, MAX_STOPS);
+
+    if (!addresses.length) {
+      showToast("No address column found in that CSV.");
+      return;
+    }
+
+    setStops(addresses.map((address) => ({ address, zone: "auto" })));
+    setAssistant(`${addresses.length} stops imported from CSV. Check the start address, then optimize.`);
+    showToast(`CSV imported: ${addresses.length} stops.`);
+    event.target.value = "";
+  };
+  reader.readAsText(file);
+}
+
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index];
+    const next = text[index + 1];
+
+    if (char === '"' && quoted && next === '"') {
+      cell += '"';
+      index += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === "," && !quoted) {
+      row.push(cell.trim());
+      cell = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") index += 1;
+      row.push(cell.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+}
+
+function findAddressValue(row) {
+  if (!row.length) return "";
+  const headerWords = ["address", "street", "location", "stop", "destination"];
+  const looksLikeHeader = row.some((cell) => headerWords.includes(cell.trim().toLowerCase()));
+  if (looksLikeHeader) return "";
+
+  return row.find((cell) => {
+    const value = cell.trim();
+    return /\d/.test(value) && /[a-z]/i.test(value);
+  }) || row[0].trim();
+}
+
 function fillSample() {
   el.startAddress.value = "1 Dundas St W, Toronto";
   el.tripDays.value = "2";
   el.maxHours.value = "7.5";
   el.serviceMinutes.value = "8";
   setStops(sampleStops.map(([address, zone]) => ({ address, zone })));
+  state.visibleSlots = 20;
+  updateVisibleSlots();
   setAssistant("Sample delivery board loaded across central, north, west, east, and south districts.");
   optimizeRoutes();
 }
@@ -221,6 +317,7 @@ function clearPlan() {
   el.maxHours.value = "8";
   el.serviceMinutes.value = "6";
   el.returnToStart.checked = false;
+  state.visibleSlots = 10;
   setStops([]);
   state.routes = [];
   state.selectedRouteId = null;
@@ -699,6 +796,7 @@ function updateCounters() {
   el.stopCounter.textContent = `${stops.length} stop${stops.length === 1 ? "" : "s"}`;
   el.dayCounter.textContent = `${days} day${days === 1 ? "" : "s"}`;
   el.routeCounter.textContent = `${state.routes.length} route${state.routes.length === 1 ? "" : "s"}`;
+  updateVisibleSlots();
 }
 
 function setAssistant(message) {

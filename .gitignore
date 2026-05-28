@@ -3,3 +3,11 @@ dist/
 .env
 .env.local
 *.local
+.playwright-cli/
+playwright-report/
+test-results/
+*.log
+route-optimizer-desktop.png
+route-optimizer-mobile.png
+route-optimizer-mobile-updated.png
+route-optimizer-review.png

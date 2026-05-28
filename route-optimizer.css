@@ -361,17 +361,36 @@ main {
 }
 
 .field,
-.toggle-row {
+.toggle-row,
+.file-import {
   display: grid;
   gap: 7px;
   margin-bottom: 12px;
 }
 
 .field span,
-.toggle-row span {
+.toggle-row span,
+.file-import span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
+}
+
+.privacy-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.file-import {
+  margin-top: 14px;
+  margin-bottom: 0;
+}
+
+.file-import input {
+  height: auto;
+  padding: 10px;
 }
 
 .field-grid {
@@ -498,6 +517,10 @@ main {
   border-radius: var(--radius);
   padding: 6px;
   background: rgba(255, 255, 255, 0.04);
+}
+
+.slot-row.slot-hidden {
+  display: none;
 }
 
 .slot-number {
