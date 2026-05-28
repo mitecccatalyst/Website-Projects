@@ -376,11 +376,28 @@ main {
   font-weight: 700;
 }
 
-.privacy-panel p {
+.privacy-panel p,
+.map-accuracy-panel p {
   margin: 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.privacy-panel .full-button {
+  width: 100%;
+  margin-top: 14px;
+}
+
+.mini-status {
+  margin-top: 12px !important;
+  color: var(--amber) !important;
+  font-family: var(--mono);
+  font-size: 11px !important;
+}
+
+.map-accuracy-panel .field {
+  margin-top: 12px;
 }
 
 .file-import {
@@ -803,6 +820,11 @@ main {
 .map-node.draft {
   background: var(--blue);
   box-shadow: 0 0 0 7px rgba(116, 184, 255, 0.14);
+}
+
+.map-node.exact {
+  background: #ffffff;
+  box-shadow: 0 0 0 7px rgba(255, 255, 255, 0.13), 0 0 24px rgba(119, 231, 182, 0.3);
 }
 
 .map-line {

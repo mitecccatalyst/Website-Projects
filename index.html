@@ -8,6 +8,8 @@
     name="description"
     content="Plan delivery routes with up to 60 stops, compare two or three efficient options, and open chosen route segments in Google Maps or Waze."
   >
+  <meta name="theme-color" content="#070908">
+  <link rel="manifest" href="./manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -122,6 +124,26 @@
             RoutePilot saves plans in this browser only. Address data is sent out
             only when you open Google Maps or Waze.
           </p>
+          <button class="ghost-button full-button" id="clearSavedDataButton" type="button">Delete saved data</button>
+        </section>
+
+        <section class="panel map-accuracy-panel">
+          <div class="panel-heading compact">
+            <p class="kicker">Map accuracy</p>
+            <h2>Exact pins when enabled</h2>
+          </div>
+          <p>
+            Preview pins appear instantly. Exact Google pins need a Maps key saved on this device.
+          </p>
+          <label class="field">
+            <span>Google Maps API key</span>
+            <input id="googleApiKey" type="password" autocomplete="off" placeholder="Optional key for exact pins">
+          </label>
+          <div class="button-row">
+            <button class="secondary-button" id="saveGoogleKeyButton" type="button">Save key</button>
+            <button class="ghost-button" id="verifyPinsButton" type="button">Verify exact pins</button>
+          </div>
+          <p class="mini-status" id="geocodeStatus">Using instant preview pins.</p>
         </section>
 
         <section class="panel">

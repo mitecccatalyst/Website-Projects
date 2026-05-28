@@ -22,6 +22,8 @@ Use it to:
 - Open selected routes in **Google Maps**.
 - Split large 25+ stop plans into **Google Maps segments** so the full 60-stop route stays usable.
 - Open the first stop in **Waze** for quick navigation.
+- Install RoutePilot on a phone or laptop with **PWA support**.
+- Verify **exact Google pins** when a Maps key is saved locally on the device.
 - Use the built-in **Road Assistant** for pacing tips, gas/food/coffee searches, and route reminders.
 
 ## Community Pitch
@@ -48,6 +50,8 @@ The goal is practical: fewer wasted miles, fewer confusing route decisions, and 
 | Google segments | Breaks large routes into Google-friendly segments. |
 | Local save | Stores the plan in the browser with `localStorage`. |
 | CSV export | Downloads the stop list for records or sharing. |
+| PWA install | Lets users add RoutePilot to a phone or laptop home screen. |
+| Exact pin mode | Optional Google geocoding support verifies real map pins when a Maps key is saved locally. |
 | Mobile-friendly UI | Works on phones, tablets, and laptops. |
 | Privacy notice | Explains that saved plans stay in the browser. |
 
@@ -122,6 +126,8 @@ Your phone and laptop must be on the same Wi-Fi network.
 
 RoutePilot currently uses a local planning engine for route ranking and organization. It does not call a paid routing API yet. Google Maps and Waze are used as handoff tools for real navigation and live traffic confirmation.
 
+The app includes optional exact pin verification with Google Maps. The Maps key is saved only in that browser with `localStorage`; do not commit API keys to the repository. For a larger public launch, move geocoding behind a backend proxy or serverless function so the key is not exposed in browser code.
+
 For very large stop lists, Google Maps may limit how many waypoints it opens in a single link. RoutePilot still keeps the full 60-stop plan locally, and the selected route now shows Google Maps segment links so drivers can open the whole route in practical chunks.
 
 ## Project Files
@@ -140,10 +146,10 @@ assets/
 
 ## Roadmap
 
+- Move Google geocoding behind a backend proxy for safer public production use.
 - Add optional Google Maps API integration for live duration estimates.
 - Add smarter waypoint chunking for 25+ Google Maps stops.
 - Add saved route profiles for repeat drivers.
-- Add offline-first install support as a PWA.
 - Improve CSV column detection for more spreadsheet formats.
 
 ## Privacy

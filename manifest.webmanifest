@@ -1,0 +1,25 @@
+{
+  "name": "RoutePilot Delivery Route Optimizer",
+  "short_name": "RoutePilot",
+  "description": "Plan delivery stops, compare efficient routes, and open routes in Google Maps or Waze.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#070908",
+  "theme_color": "#070908",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "./assets/routepilot-cover.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/routepilot-cover.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

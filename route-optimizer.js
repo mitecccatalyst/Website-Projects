@@ -1,5 +1,7 @@
 const MAX_STOPS = 60;
 const STORAGE_KEY = "routePilotPlan";
+const GOOGLE_KEY_STORAGE = "routePilotGoogleMapsKey";
+const GEOCODE_CACHE_STORAGE = "routePilotGeocodeCache";
 
 const state = {
   traffic: "normal",
@@ -8,6 +10,8 @@ const state = {
   visibleSlots: 10,
   recognition: null,
   listening: false,
+  googleReady: false,
+  geocodeCache: loadGeocodeCache(),
 };
 
 const districtCoords = {
@@ -68,15 +72,22 @@ const el = {
   toast: document.querySelector("#toast"),
   addSlotsButton: document.querySelector("#addSlotsButton"),
   csvImport: document.querySelector("#csvImport"),
+  googleApiKey: document.querySelector("#googleApiKey"),
+  saveGoogleKeyButton: document.querySelector("#saveGoogleKeyButton"),
+  verifyPinsButton: document.querySelector("#verifyPinsButton"),
+  geocodeStatus: document.querySelector("#geocodeStatus"),
+  clearSavedDataButton: document.querySelector("#clearSavedDataButton"),
 };
 
 function init() {
   renderSlots();
   bindEvents();
   setupVoiceAgent();
+  loadGoogleSettings();
   loadPlan();
   updateCounters();
   renderEmptyRoutes();
+  registerServiceWorker();
 }
 
 function renderSlots() {
@@ -105,9 +116,12 @@ function bindEvents() {
   document.querySelector("#compactButton").addEventListener("click", compactStops);
   document.querySelector("#exportButton").addEventListener("click", exportCsv);
   document.querySelector("#savePlanButton").addEventListener("click", savePlan);
+  document.querySelector("#clearSavedDataButton").addEventListener("click", clearSavedData);
   document.querySelector("#openSelectedGoogle").addEventListener("click", openSelectedGoogle);
   document.querySelector("#copySelected").addEventListener("click", copySelectedManifest);
   document.querySelector("#csvImport").addEventListener("change", importCsvFile);
+  el.saveGoogleKeyButton.addEventListener("click", saveGoogleApiKey);
+  el.verifyPinsButton.addEventListener("click", verifyExactPins);
   el.voiceAgentButton.addEventListener("click", toggleVoiceAgent);
   el.analyzeVoiceButton.addEventListener("click", () => analyzeVoiceRequest(el.voiceTranscript.value));
 
@@ -339,8 +353,124 @@ function numberWord(word) {
   }[word] || null;
 }
 
+function loadGoogleSettings() {
+  const savedKey = localStorage.getItem(GOOGLE_KEY_STORAGE) || "";
+  el.googleApiKey.value = savedKey;
+  if (savedKey) {
+    el.geocodeStatus.textContent = "Google key saved on this device. Exact pins are ready to verify.";
+  }
+}
+
+function saveGoogleApiKey() {
+  const key = el.googleApiKey.value.trim();
+  if (!key) {
+    localStorage.removeItem(GOOGLE_KEY_STORAGE);
+    state.googleReady = false;
+    el.geocodeStatus.textContent = "Google key removed. Using instant preview pins.";
+    showToast("Google key removed from this browser.");
+    return;
+  }
+
+  localStorage.setItem(GOOGLE_KEY_STORAGE, key);
+  el.geocodeStatus.textContent = "Google key saved on this device. Tap Verify exact pins.";
+  showToast("Google key saved locally.");
+}
+
+async function verifyExactPins() {
+  const key = localStorage.getItem(GOOGLE_KEY_STORAGE) || el.googleApiKey.value.trim();
+  if (!key) {
+    el.geocodeStatus.textContent = "Add a Google Maps API key to verify exact pins.";
+    showToast("Exact pins need a Google Maps API key.");
+    return;
+  }
+
+  if (el.googleApiKey.value.trim() && !localStorage.getItem(GOOGLE_KEY_STORAGE)) {
+    localStorage.setItem(GOOGLE_KEY_STORAGE, el.googleApiKey.value.trim());
+  }
+
+  const stops = getStops();
+  if (!stops.length && !el.startAddress.value.trim()) {
+    showToast("Add addresses before verifying pins.");
+    return;
+  }
+
+  el.verifyPinsButton.disabled = true;
+  el.geocodeStatus.textContent = "Loading Google geocoder...";
+
+  try {
+    await loadGoogleMapsScript(key);
+    state.googleReady = true;
+    const targets = [
+      ...(el.startAddress.value.trim() ? [{ fullAddress: el.startAddress.value.trim(), start: true }] : []),
+      ...stops,
+    ];
+
+    let verified = 0;
+    for (const target of targets) {
+      const address = target.fullAddress || displayAddress(target);
+      if (!address || getCachedGeocode(address)) {
+        if (address) verified += 1;
+        continue;
+      }
+      el.geocodeStatus.textContent = `Verifying pin ${verified + 1} of ${targets.length}...`;
+      const result = await geocodeWithGoogle(address);
+      if (result) {
+        state.geocodeCache[normalizeAddressKey(address)] = result;
+        verified += 1;
+        saveGeocodeCache();
+      }
+      await wait(140);
+    }
+
+    renderEmptyRoutes();
+    el.geocodeStatus.textContent = `${verified} exact pin${verified === 1 ? "" : "s"} verified with Google.`;
+    showToast(`${verified} exact pins verified.`);
+  } catch (error) {
+    el.geocodeStatus.textContent = "Exact pins could not be verified. Check the key or API settings.";
+    showToast("Google geocoding did not complete.");
+  } finally {
+    el.verifyPinsButton.disabled = false;
+  }
+}
+
+function loadGoogleMapsScript(key) {
+  if (window.google?.maps?.Geocoder) return Promise.resolve();
+  if (window.routePilotGoogleMapsPromise) return window.routePilotGoogleMapsPromise;
+
+  window.routePilotInitGoogle = () => {};
+  window.routePilotGoogleMapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=routePilotInitGoogle`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+
+  return window.routePilotGoogleMapsPromise;
+}
+
+function geocodeWithGoogle(address) {
+  return new Promise((resolve) => {
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ address }, (results, status) => {
+      if (status !== "OK" || !results?.[0]) {
+        resolve(null);
+        return;
+      }
+      const location = results[0].geometry.location;
+      resolve({
+        lat: location.lat(),
+        lng: location.lng(),
+        formatted: results[0].formatted_address,
+      });
+    });
+  });
+}
+
 function getStops() {
-  return [...document.querySelectorAll(".slot-row")]
+  const stops = [...document.querySelectorAll(".slot-row")]
     .map((row, index) => {
       const postalCode = row.querySelector(".slot-postal").value.trim();
       const address = row.querySelector(".slot-address").value.trim();
@@ -348,9 +478,21 @@ function getStops() {
       const fullAddress = formatFullAddress({ postalCode, address, city });
       const selectedZone = row.querySelector(".slot-zone").value;
       const zone = selectedZone === "auto" ? inferDistrict(fullAddress) : selectedZone;
-      return { index, postalCode, address, city, fullAddress, zone, coords: coordsForStop(fullAddress, zone) };
+      const geocode = getCachedGeocode(fullAddress);
+      return {
+        index,
+        postalCode,
+        address,
+        city,
+        fullAddress,
+        zone,
+        geocode,
+        coords: coordsForStop(fullAddress, zone),
+      };
     })
     .filter((stop) => stop.fullAddress);
+
+  return projectGeocodedStops(stops);
 }
 
 function setStops(stops) {
@@ -372,6 +514,56 @@ function formatFullAddress(stop) {
     .map((part) => String(part || "").trim())
     .filter(Boolean)
     .join(", ");
+}
+
+function projectGeocodedStops(stops) {
+  const exactStops = stops.filter((stop) => stop.geocode);
+  if (!exactStops.length) return stops;
+
+  const lats = exactStops.map((stop) => stop.geocode.lat);
+  const lngs = exactStops.map((stop) => stop.geocode.lng);
+  const minLat = Math.min(...lats);
+  const maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs);
+  const maxLng = Math.max(...lngs);
+  const latRange = Math.max(0.01, maxLat - minLat);
+  const lngRange = Math.max(0.01, maxLng - minLng);
+
+  return stops.map((stop) => {
+    if (!stop.geocode) return stop;
+    return {
+      ...stop,
+      exact: true,
+      coords: {
+        x: clamp(10 + ((stop.geocode.lng - minLng) / lngRange) * 80, 8, 92),
+        y: clamp(90 - ((stop.geocode.lat - minLat) / latRange) * 80, 8, 92),
+      },
+    };
+  });
+}
+
+function getCachedGeocode(address) {
+  return state.geocodeCache[normalizeAddressKey(address)] || null;
+}
+
+function normalizeAddressKey(address) {
+  return String(address || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function loadGeocodeCache() {
+  try {
+    return JSON.parse(localStorage.getItem(GEOCODE_CACHE_STORAGE) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveGeocodeCache() {
+  localStorage.setItem(GEOCODE_CACHE_STORAGE, JSON.stringify(state.geocodeCache));
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function updateVisibleSlots() {
@@ -642,6 +834,15 @@ function clearPlan() {
   renderEmptyRoutes();
   setAssistant("Plan cleared. Add a start point and up to 60 stops when you are ready.");
   localStorage.removeItem(STORAGE_KEY);
+}
+
+function clearSavedData() {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(GEOCODE_CACHE_STORAGE);
+  state.geocodeCache = {};
+  showToast("Saved route data and pin cache deleted.");
+  setAssistant("Saved browser data is deleted. The visible form stays on screen until you clear it.");
+  renderEmptyRoutes();
 }
 
 function optimizeRoutes() {
@@ -921,7 +1122,7 @@ function renderMap(route) {
   points.forEach((point, index) => {
     if (index > 0) drawLine(points[index - 1].coords, point.coords);
     const node = document.createElement("span");
-    node.className = `map-node${point.start ? " start" : ""}`;
+    node.className = `map-node${point.start ? " start" : ""}${point.exact ? " exact" : ""}`;
     node.textContent = point.start ? "S" : String(index);
     node.style.left = `${point.coords.x}%`;
     node.style.top = `${point.coords.y}%`;
@@ -951,7 +1152,7 @@ function renderDraftPins() {
 
   stops.slice(0, 60).forEach((stop, index) => {
     const node = document.createElement("span");
-    node.className = "map-node draft";
+    node.className = `map-node ${stop.exact ? "exact" : "draft"}`;
     node.textContent = String(index + 1);
     node.style.left = `${stop.coords.x}%`;
     node.style.top = `${stop.coords.y}%`;
@@ -961,7 +1162,7 @@ function renderDraftPins() {
 
   el.mapStatus.textContent = stops.length ? `${stops.length} pinned` : "Ready";
   el.mapHint.textContent = stops.length
-    ? `${stops.length} draft pin${stops.length === 1 ? "" : "s"} placed before routing.`
+    ? `${stops.filter((stop) => stop.exact).length}/${stops.length} exact pin${stops.length === 1 ? "" : "s"} verified before routing.`
     : "Pins appear here as you type addresses.";
   const previewTarget = displayAddress(stops[0]) || start || "United States";
   el.googlePreview.src = `https://www.google.com/maps?q=${encodeURIComponent(previewTarget)}&output=embed`;
@@ -1221,6 +1422,13 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("./sw.js").catch(() => {
+    // The app still works normally if install support is unavailable.
+  });
 }
 
 init();

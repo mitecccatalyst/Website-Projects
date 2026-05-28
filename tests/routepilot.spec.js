@@ -61,4 +61,19 @@ test.describe("RoutePilot planner", () => {
     await expect(page.locator("#voiceAgentStatus")).toContainText("Analyzed request");
     await expect(page.locator(".route-card")).toHaveCount(2);
   });
+
+  test("launch controls include PWA manifest, exact pin setup, and saved data clearing", async ({ page }) => {
+    await expect(page.locator("link[rel='manifest']")).toHaveAttribute("href", "./manifest.webmanifest");
+    await expect(page.locator("#googleApiKey")).toBeVisible();
+
+    await page.getByRole("button", { name: "Verify exact pins" }).click();
+    await expect(page.locator("#geocodeStatus")).toContainText("Add a Google Maps API key");
+
+    await page.locator("#startAddress").fill("1 Dundas St W, Toronto");
+    await page.locator(".slot-address").first().fill("123 Main St");
+    await page.locator(".slot-city").first().fill("Toronto");
+    await page.getByRole("button", { name: "Save plan" }).click();
+    await page.getByRole("button", { name: "Delete saved data" }).click();
+    await expect(page.locator("#assistantMessage")).toContainText("Saved browser data is deleted");
+  });
 });
