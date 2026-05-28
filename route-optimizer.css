@@ -767,6 +767,83 @@ main {
   line-height: 1.4;
 }
 
+.assistant-cards {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.assistant-cards article,
+.segment-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.assistant-cards span,
+.segment-card p {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.assistant-cards strong,
+.segment-card h3 {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.assistant-cards a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  margin-top: 10px;
+  border-radius: 6px;
+  padding: 0 9px;
+  color: #07100c;
+  background: var(--amber);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.segment-plan {
+  margin-top: 14px;
+}
+
+.segment-card {
+  display: grid;
+  gap: 12px;
+}
+
+.segment-card h3,
+.segment-card p {
+  margin-bottom: 0;
+}
+
+.segment-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.segment-links a,
+.segment-card > a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #07100c;
+  background: var(--mint);
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .toast {
   position: fixed;
   right: 18px;

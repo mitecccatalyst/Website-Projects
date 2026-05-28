@@ -44,8 +44,10 @@ const el = {
   returnToStart: document.querySelector("#returnToStart"),
   assistantMessage: document.querySelector("#assistantMessage"),
   assistantList: document.querySelector("#assistantList"),
+  assistantCards: document.querySelector("#assistantCards"),
   routeOptions: document.querySelector("#routeOptions"),
   dayPlan: document.querySelector("#dayPlan"),
+  segmentPlan: document.querySelector("#segmentPlan"),
   routeMode: document.querySelector("#routeMode"),
   mapPreview: document.querySelector("#mapPreview"),
   googlePreview: document.querySelector("#googlePreview"),
@@ -370,6 +372,7 @@ function renderRoutes() {
   });
 
   renderDayPlan(selectedRoute());
+  renderSegmentPlan(selectedRoute());
 }
 
 function routeCard(route, index) {
@@ -418,6 +421,44 @@ function renderDayPlan(route) {
   }).join("");
 }
 
+function renderSegmentPlan(route) {
+  if (!route) {
+    el.segmentPlan.innerHTML = "";
+    return;
+  }
+
+  const chunks = chunkStopsForGoogle(route.stops);
+  if (chunks.length <= 1) {
+    el.segmentPlan.innerHTML = `
+      <article class="segment-card">
+        <div>
+          <p class="kicker">Google handoff</p>
+          <h3>One Google Maps route covers this plan</h3>
+        </div>
+        <a href="${googleRouteUrl(route.stops)}" target="_blank" rel="noreferrer">Open full route</a>
+      </article>
+    `;
+    return;
+  }
+
+  const links = chunks.map((chunk, index) => `
+    <a href="${googleRouteUrl(chunk)}" target="_blank" rel="noreferrer">
+      Segment ${index + 1}: stops ${chunk[0].routeNumber}-${chunk[chunk.length - 1].routeNumber}
+    </a>
+  `).join("");
+
+  el.segmentPlan.innerHTML = `
+    <article class="segment-card">
+      <div>
+        <p class="kicker">Google handoff</p>
+        <h3>${chunks.length} Google Maps segments for this selected route</h3>
+        <p>Large routes are split so the full 60-stop plan stays usable with Google Maps waypoint limits.</p>
+      </div>
+      <div class="segment-links">${links}</div>
+    </article>
+  `;
+}
+
 function selectRoute(routeId) {
   state.selectedRouteId = routeId;
   const route = selectedRoute();
@@ -435,6 +476,7 @@ function renderEmptyRoutes() {
   el.routeMode.textContent = "Waiting for stops";
   el.routeOptions.innerHTML = '<div class="empty-state">Add a start address and at least one stop, then optimize to see the top route options.</div>';
   el.dayPlan.innerHTML = "";
+  el.segmentPlan.innerHTML = "";
   renderMap(null);
   updateCounters();
 }
@@ -495,6 +537,35 @@ function renderGuidance(route) {
     `Mid-route check near ${shortAddress(midpoint.address)}. If delayed, move low-priority stops to the next day.`,
     `Finish toward ${shortAddress(last.address)}${el.returnToStart.checked ? " and navigate back to start" : ""}.`,
   ].map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+
+  const breakAnchor = midpoint?.address || first.address;
+  const gasAnchor = route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.35)))]?.address || breakAnchor;
+  const foodAnchor = route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.55)))]?.address || breakAnchor;
+  const coffeeAnchor = route.stops[Math.min(route.stops.length - 1, Math.max(0, Math.floor(route.stops.length * 0.72)))]?.address || breakAnchor;
+
+  el.assistantCards.innerHTML = [
+    {
+      type: "Gas",
+      title: `Search near ${shortAddress(gasAnchor)}`,
+      href: googleSearchUrl("gas station", gasAnchor),
+    },
+    {
+      type: "Food",
+      title: `Break near ${shortAddress(foodAnchor)}`,
+      href: googleSearchUrl("food near me", foodAnchor),
+    },
+    {
+      type: "Coffee",
+      title: `Late-route stop near ${shortAddress(coffeeAnchor)}`,
+      href: googleSearchUrl("coffee", coffeeAnchor),
+    },
+  ].map((card) => `
+    <article>
+      <span>${escapeHtml(card.type)}</span>
+      <strong>${escapeHtml(card.title)}</strong>
+      <a href="${card.href}" target="_blank" rel="noreferrer">Open Google</a>
+    </article>
+  `).join("");
 }
 
 function googleRouteUrl(stops) {
@@ -511,6 +582,26 @@ function googleRouteUrl(stops) {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
+function googleSearchUrl(query, nearAddress) {
+  const params = new URLSearchParams({
+    api: "1",
+    query: `${query} near ${nearAddress}`,
+  });
+  return `https://www.google.com/maps/search/?${params.toString()}`;
+}
+
+function chunkStopsForGoogle(stops) {
+  const maxStopsPerSegment = 24;
+  const numberedStops = stops.map((stop, index) => ({ ...stop, routeNumber: index + 1 }));
+  const chunks = [];
+
+  for (let index = 0; index < numberedStops.length; index += maxStopsPerSegment) {
+    chunks.push(numberedStops.slice(index, index + maxStopsPerSegment));
+  }
+
+  return chunks;
+}
+
 function wazeRouteUrl(stop) {
   const address = stop?.address || el.startAddress.value.trim();
   return `https://waze.com/ul?q=${encodeURIComponent(address)}&navigate=yes`;
@@ -521,6 +612,9 @@ function openSelectedGoogle() {
   if (!route) {
     showToast("Optimize a route first.");
     return;
+  }
+  if (route.stops.length > 24) {
+    showToast("Opening the first Google segment. Use the segment links for the full large route.");
   }
   window.open(googleRouteUrl(route.stops), "_blank", "noopener,noreferrer");
 }
