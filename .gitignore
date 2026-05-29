@@ -11,3 +11,6 @@ route-optimizer-desktop.png
 route-optimizer-mobile.png
 route-optimizer-mobile-updated.png
 route-optimizer-review.png
+
+# Local Netlify folder
+.netlify
